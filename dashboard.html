@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TPN Operations Dashboard</title>
+<style>
+:root{--ink:#10233f;--muted:#6b778c;--line:#dde4ee;--bg:#f4f7fb;--card:#fff;--accent:#1f4e78}
+*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:linear-gradient(135deg,var(--accent),#173753);color:#fff;padding:20px 28px}header h1{margin:0 0 5px;font-size:25px}header p{margin:0;opacity:.9;font-size:13px}
+.userbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}.userbar input{border:1px solid #d7e0ea;border-radius:8px;padding:7px 9px;min-width:180px}.userlabel{font-size:12px;opacity:.95;font-weight:700}
+.wrap{max-width:1550px;margin:auto;padding:22px}.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+.card,.panel{background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 3px 14px rgba(16,35,63,.05)}.card{padding:18px;text-align:left;cursor:pointer;color:var(--ink)}.card.active{outline:3px solid rgba(31,78,120,.18)}
+.label{display:block;color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase}.big{display:block;font-size:34px;font-weight:800;margin-top:6px}.sub{display:block;color:var(--muted);font-size:12px;margin-top:4px}
+.panel{padding:16px;margin-top:14px}.panel h2{margin:0 0 10px;font-size:17px}.panelhead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}.mini{width:100%;border-collapse:collapse;font-size:13px}.mini th,.mini td{padding:8px 9px;border-bottom:1px solid #edf1f6;text-align:left}.mini th{color:var(--muted);font-size:11px;text-transform:uppercase}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}.toolbar input,.toolbar select{background:#fff;border:1px solid var(--line);border-radius:9px;padding:10px 12px}.toolbar input{min-width:280px;flex:1}
+button{font:inherit;border:0;background:var(--accent);color:#fff;border-radius:9px;padding:9px 12px;cursor:pointer}button.secondary{background:#e9eff6;color:var(--ink)}
+.tablewrap{overflow:auto;max-height:570px;border:1px solid var(--line);border-radius:12px;background:#fff}table.data{width:100%;border-collapse:separate;border-spacing:0;min-width:1120px;font-size:13px}table.data th{position:sticky;top:0;background:#edf3f9;text-align:left;padding:10px;border-bottom:1px solid var(--line);z-index:1}table.data td{padding:9px 10px;border-bottom:1px solid #eef2f6;white-space:nowrap}
+.badge{display:inline-block;padding:3px 8px;border-radius:999px;background:#eef3f8;font-weight:700}.ackbtn{border:1px solid #cfd9e6;background:#fff;color:#1f4e78;padding:6px 9px;font-weight:700}.ackbtn.done{background:#e7f3ea;color:#245c32;border-color:#b9d8c0}.acknote{display:block;font-size:11px;color:var(--muted);margin-top:4px}.meta{color:var(--muted);font-size:12px;margin:7px 0}.hidden{display:none!important}
+@media(max-width:1050px){.cards{grid-template-columns:repeat(2,1fr)}.grid2{grid-template-columns:1fr}}@media(max-width:560px){.cards{grid-template-columns:1fr}.wrap{padding:12px}}
+</style>
+<script src="./data.js"></script></head>
+<body><header><h1>TPN Operations Dashboard</h1><p id="snap">Loading snapshot…</p>
+<div class="userbar"><span class="userlabel">Current user:</span><input id="ackUser" placeholder="Enter your name"><button id="saveUser">Set name</button><span id="userStatus" class="userlabel"></span></div></header>
+<main class="wrap">
+<section class="cards">
+<button class="card" data-filter="live"><span class="label">Total Live</span><span class="big" id="liveCount">0</span><span class="sub" id="liveSub"></span></button>
+<button class="card" data-filter="risk"><span class="label">Risk</span><span class="big" id="riskCount">0</span><span class="sub" id="riskSub"></span></button>
+<button class="card" data-filter="noscans"><span class="label">Jobs with No Scans</span><span class="big" id="noscansCount">0</span><span class="sub" id="noscansSub"></span></button>
+<button class="card" data-filter="wdd"><span class="label">WDD Risk</span><span class="big" id="wddCount">0</span><span class="sub" id="wddSub"></span></button>
+<button class="card" data-filter="undelivered"><span class="label">Undelivered</span><span class="big" id="undeliveredCount">0</span><span class="sub" id="undeliveredSub"></span></button>
+</section>
+<section id="drillPanel" class="panel hidden"><div class="panelhead"><div><h2 id="drillTitle"></h2><div id="drillMeta" class="meta"></div></div><button id="closeDrill" class="secondary">Close list</button></div><div class="tablewrap"><table class="data"><thead><tr><th>Docket</th><th>Sender</th><th>Service</th><th>Status</th><th>Pallets</th><th>Consignee</th><th>Postcode</th><th>Delivery Depot</th><th>Customer Advised</th></tr></thead><tbody id="drillBody"></tbody></table></div></section>
+<section class="grid2"><div class="panel"><h2>Live status summary</h2><div id="statusSummary"></div></div><div class="panel"><h2>Live delivery depot summary</h2><div id="depotSummary"></div></div></section>
+<section class="panel"><h2>Consignment grid</h2><div class="toolbar"><input id="search" type="search" placeholder="Search docket, sender, consignee, postcode, depot…"><select id="service"><option value="">All services</option></select><select id="status"><option value="">All statuses</option></select><button id="clear" class="secondary">Clear filters</button></div><div id="resultMeta" class="meta"></div><div class="tablewrap"><table class="data"><thead><tr><th>Docket</th><th>Sender</th><th>Service</th><th>Status</th><th>Pallets</th><th>Consignee</th><th>Postcode</th><th>Delivery Depot</th><th>Customer Advised</th></tr></thead><tbody id="gridBody"></tbody></table></div></section>
+</main>
+<script>
+const data=(window.TPN_SNAPSHOT&&window.TPN_SNAPSHOT.rows)||[];
+document.getElementById("snap").textContent=`Source: ${window.TPN_SNAPSHOT?.source||"unknown"} · Updated: ${window.TPN_SNAPSHOT?.generated_at||"unknown"} · Acknowledgements are saved in this browser.`;
+const ACK_KEY="tpn_dashboard_ack_shared_html", USER_KEY="tpn_dashboard_current_user";
+let ackState={};try{ackState=JSON.parse(localStorage.getItem(ACK_KEY)||"{}")}catch(e){}let cardFilter="";
+const $=id=>document.getElementById(id), esc=v=>String(v??"").replace(/[&<>"']/g,s=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[s]));
+const pallets=r=>r.reduce((a,x)=>a+(+x.Pallets||0),0);
+function currentUser(){return(localStorage.getItem(USER_KEY)||"").trim()}function setUser(n){n=(n||"").trim();if(n)localStorage.setItem(USER_KEY,n);else localStorage.removeItem(USER_KEY);ackUser.value=n;userStatus.textContent=n?`Acknowledgements stamped as ${n}`:"Enter a name before acknowledging";}
+function isAck(d){return!!ackState[String(d)]}function label(d){const a=ackState[String(d)];if(!a)return"";return`${a.user} · ${new Date(a.time).toLocaleString("en-GB")}`}
+function toggleAck(d){const k=String(d);if(ackState[k])delete ackState[k];else{const u=currentUser();if(!u){alert("Please enter your name first.");ackUser.focus();return}ackState[k]={user:u,time:new Date().toISOString()}}localStorage.setItem(ACK_KEY,JSON.stringify(ackState));renderAll()}
+function rowsForCard(n){if(n==="live")return data.filter(x=>x.Live);if(n==="risk")return data.filter(x=>x.Risk);if(n==="noscans")return data.filter(x=>x.NoScans);if(n==="wdd")return data.filter(x=>x.WDD);if(n==="undelivered")return data.filter(x=>x.Undelivered);return data}
+function title(n){return{live:"Total Live consignments",risk:"Risk consignments",noscans:"Jobs with No Scans",wdd:"WDD Risk consignments",undelivered:"Undelivered consignments"}[n]||""}
+function ackCell(x){const d=isAck(x.Docket);return`<td><button class="ackbtn ${d?"done":""}" data-ack="${esc(x.Docket)}">${d?"✓ Acknowledged":"Acknowledge"}</button>${d?`<span class="acknote">${esc(label(x.Docket))}</span>`:""}</td>`}
+function row(x){return`<tr><td><strong>${esc(x.Docket)}</strong></td><td>${esc(x.Sender)}</td><td>${esc(x.Service)}</td><td><span class="badge">${esc(x.Status)}</span></td><td>${x.Pallets}</td><td>${esc(x.Consignee)}</td><td>${esc(x.Postcode)}</td><td>${esc(x.DeliveryDepot)}</td>${ackCell(x)}</tr>`}
+function wire(root){root.querySelectorAll("[data-ack]").forEach(b=>b.onclick=()=>toggleAck(b.dataset.ack))}
+function renderCards(){for(const [n,c,s,l] of [["live","liveCount","liveSub","all statuses except DEL"],["risk","riskCount","riskSub","standard risk statuses, excluding CRE"],["noscans","noscansCount","noscansSub","status CRE"],["wdd","wddCount","wddSub","WDD in core services"],["undelivered","undeliveredCount","undeliveredSub","core services, status ≠ DEL"]]){const r=rowsForCard(n);$(c).textContent=r.length;$(s).textContent=`${pallets(r)} pallets · ${l}`}}
+function renderSummaries(){const live=rowsForCard("live"),sc={},dc={};live.forEach(x=>{sc[x.Status||"(blank)"]=(sc[x.Status||"(blank)"]||0)+1;const d=x.DeliveryDepot||"(blank)";dc[d]=dc[d]||{c:0,p:0};dc[d].c++;dc[d].p+=(+x.Pallets||0)});$("statusSummary").innerHTML='<table class="mini"><tbody>'+Object.entries(sc).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join("")+'</tbody></table>';$("depotSummary").innerHTML='<table class="mini"><tbody>'+Object.entries(dc).sort((a,b)=>b[1].c-a[1].c).slice(0,15).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v.c}</td><td>${v.p} pallets</td></tr>`).join("")+'</tbody></table>'}
+function renderDrill(){if(!cardFilter){drillPanel.classList.add("hidden");return}const r=rowsForCard(cardFilter);drillTitle.textContent=title(cardFilter);drillMeta.textContent=`${r.length} consignments · ${pallets(r)} pallets`;drillBody.innerHTML=r.map(row).join("");drillPanel.classList.remove("hidden");wire(drillBody)}
+function renderGrid(){const q=search.value.toLowerCase().trim(),sv=service.value,st=status.value;let r=cardFilter?rowsForCard(cardFilter):data;r=r.filter(x=>(!sv||x.Service===sv)&&(!st||x.Status===st)&&(!q||[x.Docket,x.Sender,x.Service,x.Status,x.Consignee,x.Postcode,x.DeliveryDepot].join(" ").toLowerCase().includes(q)));resultMeta.textContent=`${r.length} consignments · ${pallets(r)} pallets`;gridBody.innerHTML=r.map(row).join("");wire(gridBody)}
+function renderAll(){renderCards();renderSummaries();renderDrill();renderGrid()}
+[...new Set(data.map(x=>x.Service).filter(Boolean))].sort().forEach(v=>service.insertAdjacentHTML("beforeend",`<option>${esc(v)}</option>`));[...new Set(data.map(x=>x.Status).filter(Boolean))].sort().forEach(v=>status.insertAdjacentHTML("beforeend",`<option>${esc(v)}</option>`));
+document.querySelectorAll(".card").forEach(c=>c.onclick=()=>{cardFilter=c.dataset.filter;document.querySelectorAll(".card").forEach(x=>x.classList.toggle("active",x.dataset.filter===cardFilter));renderAll()});closeDrill.onclick=()=>{cardFilter="";document.querySelectorAll(".card").forEach(x=>x.classList.remove("active"));renderAll()};[search,service,status].forEach(x=>x.addEventListener("input",renderGrid));clear.onclick=()=>{cardFilter="";search.value="";service.value="";status.value="";document.querySelectorAll(".card").forEach(x=>x.classList.remove("active"));renderAll()};saveUser.onclick=()=>setUser(ackUser.value);ackUser.onkeydown=e=>{if(e.key==="Enter")setUser(ackUser.value)};setUser(currentUser());renderAll();
+</script></body></html>

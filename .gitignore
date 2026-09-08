@@ -1,0 +1,7 @@
+.env
+config.json
+downloads/
+tpn_failure.png
+tpn_failure_url.txt
+tpn_failure_html.html
+__pycache__/
