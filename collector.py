@@ -135,7 +135,11 @@ def set_grid_filter(page, column_name: str, operator_text: str, value: str):
             pass
     raise RuntimeError(f"Could not apply filter for {column_name}")
 
-def run_collection() -> dict:
+def run_collection(stage_callback=None) -> dict:
+    def stage(name):
+        if stage_callback:
+            stage_callback(name)
+
     username = os.getenv("TPN_USERNAME")
     password = os.getenv("TPN_PASSWORD")
     if not username or not password:
@@ -148,10 +152,14 @@ def run_collection() -> dict:
     date_text = target_day.strftime(date_format)
 
     with sync_playwright() as p:
+        stage("Starting browser")
         browser = p.chromium.launch(headless=headless)
         page = browser.new_page(accept_downloads=True)
+        page.set_default_timeout(12000)
+        page.set_default_navigation_timeout(30000)
         try:
-            page.goto(login_url, wait_until="domcontentloaded", timeout=60000)
+            stage("Opening TPN login")
+            page.goto(login_url, wait_until="domcontentloaded", timeout=30000)
 
             # TPN Connect staging login: the current page exposes Username and Password
             # by placeholder. Use those first, with generic fallbacks.
@@ -174,6 +182,7 @@ def run_collection() -> dict:
             if not (u and pw):
                 raise RuntimeError("Could not identify TPN username/password fields.")
 
+            stage("Entering TPN credentials")
             u.fill(username)
             pw.fill(password)
 
@@ -191,6 +200,7 @@ def run_collection() -> dict:
                 except Exception:
                     pass
 
+            stage("Submitting TPN login")
             if login:
                 login.click()
             else:
@@ -211,16 +221,21 @@ def run_collection() -> dict:
                 raise RuntimeError("TPN login page remained visible after submitting credentials.")
 
             # Confirmed workflow
+            stage("Opening Browse")
+            page.screenshot(path=str(HERE/"tpn_stage_after_login.png"), full_page=True)
             click_named(page, "Browse", exact=True)
             page.wait_for_timeout(800)
 
+            stage("Setting Date From")
             fill_date(page, "Date From",
                       ["input[name*='DateFrom' i]","input[id*='DateFrom' i]","input[placeholder*='Date From' i]"],
                       date_text)
+            stage("Setting Date To")
             fill_date(page, "Date To",
                       ["input[name*='DateTo' i]","input[id*='DateTo' i]","input[placeholder*='Date To' i]"],
                       date_text)
 
+            stage("Loading Browse results")
             # Browse button inside tab
             b = page.get_by_role("button", name="Browse", exact=True)
             if b.count():
@@ -230,7 +245,9 @@ def run_collection() -> dict:
             page.wait_for_load_state("networkidle", timeout=60000)
             page.wait_for_timeout(800)
 
+            stage("Filtering Req = 8")
             set_grid_filter(page, "Req", "Is equal to", "8")
+            stage("Filtering Del != 8")
             set_grid_filter(page, "Del", "Is not equal to", "8")
 
             rows = page.locator(".k-grid-content tbody tr, table tbody tr")
@@ -252,7 +269,8 @@ def run_collection() -> dict:
             if not export:
                 raise RuntimeError("Could not find Export To Excel.")
 
-            with page.expect_download(timeout=60000) as dli:
+            stage("Exporting Excel")
+            with page.expect_download(timeout=45000) as dli:
                 export.click()
             download = dli.value
             filename = download.suggested_filename
@@ -261,7 +279,9 @@ def run_collection() -> dict:
             target = DOWNLOAD_DIR / filename
             download.save_as(target)
 
-            subprocess.check_call([sys.executable, str(HERE/"build_data_from_xlsx.py"), str(target), str(HERE/"data.js")])
+            stage("Building dashboard data")
+            subprocess.check_call([sys.executable, str(HERE/"build_data_from_xlsx.py"), str(target), str(HERE/"data.js")], timeout=45)
+            stage("Completed")
 
             return {
                 "ok": True,
@@ -270,6 +290,7 @@ def run_collection() -> dict:
                 "download": target.name
             }
         except Exception:
+            stage("Failed")
             page.screenshot(path=str(HERE/"tpn_failure.png"), full_page=True)
             (HERE/"tpn_failure_url.txt").write_text(page.url, encoding="utf-8")
             try:

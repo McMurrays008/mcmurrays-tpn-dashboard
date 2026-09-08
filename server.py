@@ -20,21 +20,28 @@ status = {
     "last_attempt": None,
     "last_success": None,
     "last_error": None,
-    "running": False
+    "running": False,
+    "current_stage": "Idle"
 }
 
 def do_refresh():
     if not lock.acquire(blocking=False):
         return {"ok": False, "message": "Refresh already running"}
     status["running"] = True
+    status["current_stage"] = "Starting"
     status["last_attempt"] = datetime.now().astimezone().isoformat(timespec="seconds")
     try:
-        result = run_collection()
+        def update_stage(name):
+            status["current_stage"] = name
+        result = run_collection(stage_callback=update_stage)
         status["last_success"] = datetime.now().astimezone().isoformat(timespec="seconds")
         status["last_error"] = None
+        status["current_stage"] = "Completed"
         return result
     except Exception as e:
         status["last_error"] = f"{type(e).__name__}: {e}"
+        if status.get("current_stage") != "Failed":
+            status["current_stage"] = "Failed"
         raise
     finally:
         status["running"] = False
@@ -165,6 +172,9 @@ def admin_refresh_run(token: str = Form(...)):
         return HTMLResponse(admin_page("Invalid refresh token.", False), status_code=401)
     try:
         result = do_refresh()
+        if result.get("ok") is False:
+            msg = result.get("message", "Refresh did not start.")
+            return HTMLResponse(admin_page(msg, False), status_code=409)
         msg = "Refresh completed successfully. " + json.dumps(result, ensure_ascii=False)
         return HTMLResponse(admin_page(msg, True))
     except Exception as e:
