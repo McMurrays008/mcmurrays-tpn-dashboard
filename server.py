@@ -1,12 +1,12 @@
 from __future__ import annotations
-import asyncio, json, os, threading
+import json, os, threading
 from datetime import datetime
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import FastAPI, Header, HTTPException, Form
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, RedirectResponse
 import uvicorn
 
 from collector import run_collection
@@ -50,8 +50,11 @@ def dashboard():
 
 @app.get("/data.js")
 def data_js():
-    return FileResponse(HERE/"data.js", media_type="application/javascript",
-                        headers={"Cache-Control":"no-store, max-age=0"})
+    return FileResponse(
+        HERE/"data.js",
+        media_type="application/javascript",
+        headers={"Cache-Control":"no-store, max-age=0"}
+    )
 
 @app.get("/health")
 def health():
@@ -66,6 +69,70 @@ def refresh(x_refresh_token: str | None = Header(default=None)):
         return do_refresh()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+def admin_page(message: str = "", ok: bool | None = None) -> str:
+    if ok is True:
+        banner = f'<div class="banner success">{message}</div>'
+    elif ok is False:
+        banner = f'<div class="banner error">{message}</div>'
+    else:
+        banner = ""
+    st = json.dumps(status, ensure_ascii=False)
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TPN Manual Refresh</title>
+<style>
+body{{font-family:Arial,sans-serif;background:#f4f7fb;margin:0;padding:32px;color:#1f2937}}
+.card{{max-width:720px;margin:0 auto;background:white;padding:28px;border-radius:14px;
+box-shadow:0 4px 18px rgba(0,0,0,.08)}}
+h1{{margin-top:0}}
+label{{display:block;font-weight:700;margin-bottom:8px}}
+input{{width:100%;box-sizing:border-box;padding:12px;border:1px solid #cbd5e1;border-radius:8px}}
+button{{margin-top:14px;padding:12px 18px;border:0;border-radius:8px;background:#1f4e78;color:white;
+font-weight:700;cursor:pointer}}
+.banner{{padding:12px 14px;border-radius:8px;margin-bottom:16px}}
+.success{{background:#e8f5e9}}
+.error{{background:#fdecec}}
+pre{{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:8px;font-size:13px}}
+.small{{font-size:13px;color:#64748b}}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>TPN Manual Refresh</h1>
+<p>Enter the Render <strong>REFRESH_TOKEN</strong> and click the button below.</p>
+{banner}
+<form method="post" action="/admin-refresh">
+<label for="token">Refresh token</label>
+<input id="token" name="token" type="password" autocomplete="off" required>
+<button type="submit">Run TPN Refresh Now</button>
+</form>
+<p class="small">The token is submitted only to this service and is not stored by this page.</p>
+<h3>Current service status</h3>
+<pre>{st}</pre>
+<p><a href="/health">Open health check</a> · <a href="/">Open dashboard</a></p>
+</div>
+</body>
+</html>"""
+
+@app.get("/admin-refresh", response_class=HTMLResponse)
+def admin_refresh_page():
+    return HTMLResponse(admin_page())
+
+@app.post("/admin-refresh", response_class=HTMLResponse)
+def admin_refresh_run(token: str = Form(...)):
+    expected = os.getenv("REFRESH_TOKEN")
+    if not expected or token != expected:
+        return HTMLResponse(admin_page("Invalid refresh token.", False), status_code=401)
+    try:
+        result = do_refresh()
+        msg = "Refresh completed successfully. " + json.dumps(result, ensure_ascii=False)
+        return HTMLResponse(admin_page(msg, True))
+    except Exception as e:
+        return HTMLResponse(admin_page(f"Refresh failed: {type(e).__name__}: {e}", False), status_code=500)
 
 @app.get("/failure-screenshot")
 def failure_screenshot(x_refresh_token: str | None = Header(default=None)):
@@ -83,9 +150,16 @@ def start_scheduler():
     minutes = max(5, int(os.getenv("REFRESH_MINUTES","15")))
     tz = os.getenv("TIMEZONE","Europe/London")
     sched = BackgroundScheduler(timezone=tz)
-    # Weekdays only, every N minutes. If you want tighter working hours, change hour="6-19".
-    sched.add_job(do_refresh, "cron", day_of_week="mon-fri", hour="6-19",
-                  minute=f"*/{minutes}", id="tpn_refresh", max_instances=1, coalesce=True)
+    sched.add_job(
+        do_refresh,
+        "cron",
+        day_of_week="mon-fri",
+        hour="6-19",
+        minute=f"*/{minutes}",
+        id="tpn_refresh",
+        max_instances=1,
+        coalesce=True
+    )
     sched.start()
 
 if __name__ == "__main__":
