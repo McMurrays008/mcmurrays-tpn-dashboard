@@ -153,13 +153,62 @@ def run_collection() -> dict:
         try:
             page.goto(login_url, wait_until="domcontentloaded", timeout=60000)
 
-            u = first_visible(page, ["input[name='username']","input[type='email']","#Username","#username"])
-            pw = first_visible(page, ["input[name='password']","input[type='password']","#Password","#password"])
-            login = first_visible(page, ["button[type='submit']","input[type='submit']","text=Login","text=Sign in"])
-            if not (u and pw and login):
-                raise RuntimeError("Could not identify TPN login controls.")
-            u.fill(username); pw.fill(password); login.click()
-            page.wait_for_load_state("networkidle", timeout=60000)
+            # TPN Connect staging login: the current page exposes Username and Password
+            # by placeholder. Use those first, with generic fallbacks.
+            u = first_visible(page, [
+                "input[placeholder='Username']",
+                "input[placeholder*='Username' i]",
+                "input[name='Username']",
+                "input[name='username']",
+                "#Username", "#username",
+                "input[type='text']"
+            ])
+            pw = first_visible(page, [
+                "input[placeholder='Password']",
+                "input[placeholder*='Password' i]",
+                "input[name='Password']",
+                "input[name='password']",
+                "#Password", "#password",
+                "input[type='password']"
+            ])
+            if not (u and pw):
+                raise RuntimeError("Could not identify TPN username/password fields.")
+
+            u.fill(username)
+            pw.fill(password)
+
+            # The yellow Login control is reliably identified by its visible text.
+            login = None
+            for candidate in [
+                page.get_by_role("button", name="Login", exact=True),
+                page.get_by_role("link", name="Login", exact=True),
+                page.get_by_text("Login", exact=True),
+            ]:
+                try:
+                    if candidate.count() and candidate.first.is_visible():
+                        login = candidate.first
+                        break
+                except Exception:
+                    pass
+
+            if login:
+                login.click()
+            else:
+                # Fallback for legacy ASP.NET/image/button implementations:
+                # submit from the password field/form.
+                try:
+                    pw.press("Enter")
+                except Exception:
+                    raise RuntimeError("Found TPN credentials fields but could not activate Login.")
+            try:
+                page.wait_for_load_state("networkidle", timeout=30000)
+            except Exception:
+                page.wait_for_load_state("domcontentloaded", timeout=30000)
+            page.wait_for_timeout(1000)
+
+            # If login failed, stop before attempting Browse and preserve diagnostics.
+            if page.get_by_text("Login", exact=True).count() and page.locator("input[placeholder*='Username' i]:visible").count():
+                raise RuntimeError("TPN login page remained visible after submitting credentials.")
 
             # Confirmed workflow
             click_named(page, "Browse", exact=True)
