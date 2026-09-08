@@ -72,10 +72,18 @@ def refresh(x_refresh_token: str | None = Header(default=None)):
     expected = os.getenv("REFRESH_TOKEN")
     if not expected or x_refresh_token != expected:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
-    try:
-        return do_refresh()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
+    if status.get("running"):
+        return JSONResponse({"ok": False, "message": "Refresh already running"}, status_code=409)
+
+    def worker():
+        try:
+            do_refresh()
+        except Exception:
+            pass
+
+    threading.Thread(target=worker, daemon=True).start()
+    return JSONResponse({"ok": True, "message": "Refresh started"})
 
 def admin_page(message: str = "", ok: bool | None = None, show_screenshot: bool = False) -> str:
     if ok is True:
@@ -170,15 +178,24 @@ def admin_refresh_run(token: str = Form(...)):
     expected = os.getenv("REFRESH_TOKEN")
     if not expected or token != expected:
         return HTMLResponse(admin_page("Invalid refresh token.", False), status_code=401)
-    try:
-        result = do_refresh()
-        if result.get("ok") is False:
-            msg = result.get("message", "Refresh did not start.")
-            return HTMLResponse(admin_page(msg, False), status_code=409)
-        msg = "Refresh completed successfully. " + json.dumps(result, ensure_ascii=False)
-        return HTMLResponse(admin_page(msg, True))
-    except Exception as e:
-        return HTMLResponse(admin_page(f"Refresh failed: {type(e).__name__}: {e}", False), status_code=500)
+
+    if status.get("running"):
+        return HTMLResponse(admin_page("A TPN refresh is already running. Check /health for progress.", False), status_code=409)
+
+    def worker():
+        try:
+            do_refresh()
+        except Exception:
+            # Error details are already captured in shared status by do_refresh().
+            pass
+
+    threading.Thread(target=worker, daemon=True).start()
+    return HTMLResponse(
+        admin_page(
+            "TPN refresh started in the background. Open the health check to follow current_stage.",
+            True
+        )
+    )
 
 @app.post("/admin-show-failure", response_class=HTMLResponse)
 def admin_show_failure(token: str = Form(...)):
