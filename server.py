@@ -15,7 +15,7 @@ HERE = Path(__file__).resolve().parent
 STATUS_FILE = HERE / "tpn_run_status.json"
 load_dotenv(HERE/".env")
 
-APP_VERSION = "v10-no-grid-filter-low-memory"
+APP_VERSION = "v11-xls-support-low-memory"
 app = FastAPI(title="TPN Dashboard Automation")
 lock = threading.Lock()
 
