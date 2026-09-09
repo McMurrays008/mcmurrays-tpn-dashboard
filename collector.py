@@ -305,10 +305,16 @@ def run_collection(stage_callback=None) -> dict:
                 raise RuntimeError("Could not find Export To Excel.")
 
             stage("Exporting Excel")
-            # TPN can start the download while leaving a navigation pending.
-            # Capture the download without waiting for that navigation.
+            # TPN's legacy Telerik export button can remain "unstable" long
+            # enough for Playwright's normal actionability checks to time out,
+            # even though the element is visible. Capture the download and use
+            # a forced click so temporary layout movement/overlays do not block it.
             with page.expect_download(timeout=120000) as dli:
-                export.click(timeout=12000, no_wait_after=True)
+                try:
+                    export.click(timeout=15000, no_wait_after=True, force=True)
+                except Exception:
+                    # Final fallback: invoke the button's native DOM click.
+                    export.evaluate("el => el.click()")
             download = dli.value
             filename = download.suggested_filename
             if not filename.lower().endswith((".xlsx",".xls")):
