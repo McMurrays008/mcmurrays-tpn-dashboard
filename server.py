@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json, os, threading
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -15,7 +16,7 @@ HERE = Path(__file__).resolve().parent
 STATUS_FILE = HERE / "tpn_run_status.json"
 load_dotenv(HERE/".env")
 
-APP_VERSION = "v13-fixed-hourly-filters"
+APP_VERSION = "v15-fresh-data-guard"
 app = FastAPI(title="TPN Dashboard Automation")
 lock = threading.Lock()
 
@@ -61,6 +62,58 @@ def _load_status():
 status = _load_status()
 _save_status()
 
+def _local_now():
+    tz_name = os.getenv("TIMEZONE", "Europe/London")
+    try:
+        return datetime.now(ZoneInfo(tz_name))
+    except Exception:
+        return datetime.now().astimezone()
+
+def _snapshot_payload():
+    p = HERE / "data.js"
+    if not p.exists():
+        return None
+    try:
+        txt = p.read_text(encoding="utf-8")
+        marker = "window.TPN_SNAPSHOT = "
+        if not txt.startswith(marker):
+            return None
+        payload = txt[len(marker):].strip()
+        if payload.endswith(";"):
+            payload = payload[:-1]
+        snap = json.loads(payload)
+        return snap if isinstance(snap, dict) else None
+    except Exception:
+        return None
+
+def _snapshot_is_fresh():
+    """Fresh means generated today in the configured local timezone."""
+    snap = _snapshot_payload()
+    if not snap:
+        return False
+    generated_at = snap.get("generated_at")
+    if not generated_at:
+        return False
+    try:
+        dt = datetime.fromisoformat(str(generated_at))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=_local_now().tzinfo)
+        return dt.astimezone(_local_now().tzinfo).date() == _local_now().date()
+    except Exception:
+        return False
+
+def _start_refresh_background(reason="automatic"):
+    if status.get("running") or lock.locked():
+        return False
+    def worker():
+        try:
+            print(f"[refresh] Background refresh requested: {reason}", flush=True)
+            do_refresh()
+        except Exception:
+            pass
+    threading.Thread(target=worker, daemon=True).start()
+    return True
+
 def do_refresh():
     if not lock.acquire(blocking=False):
         return {"ok": False, "message": "Refresh already running"}
@@ -103,6 +156,19 @@ def dashboard():
 
 @app.get("/data.js")
 def data_js():
+    if not _snapshot_is_fresh():
+        _start_refresh_background("stale or missing data requested")
+        return JSONResponse(
+            {
+                "ok": False,
+                "fresh": False,
+                "message": "Refreshing latest TPN data. Stale repository snapshot is not being served.",
+                "status": status,
+                "data": _data_info(),
+            },
+            status_code=503,
+            headers={"Cache-Control":"no-store, max-age=0"}
+        )
     return FileResponse(
         HERE/"data.js",
         media_type="application/javascript",
@@ -154,7 +220,15 @@ def _data_info():
 
 @app.get("/health")
 def health():
-    return JSONResponse({"service":"tpn-dashboard","version":APP_VERSION,"status":status,"memory":_memory_info(),"data":_data_info()})
+    data_info = _data_info()
+    data_info["fresh"] = _snapshot_is_fresh()
+    return JSONResponse({
+        "service":"tpn-dashboard",
+        "version":APP_VERSION,
+        "status":status,
+        "memory":_memory_info(),
+        "data":data_info
+    })
 
 @app.post("/refresh")
 def refresh(x_refresh_token: str | None = Header(default=None)):
@@ -306,18 +380,20 @@ def failure_screenshot(x_refresh_token: str | None = Header(default=None)):
         raise HTTPException(status_code=404, detail="No failure screenshot available")
     return FileResponse(p, media_type="image/png")
 
+scheduler = None
+
 def start_scheduler():
+    global scheduler
+    if scheduler is not None:
+        return
     if os.getenv("ENABLE_SCHEDULER","true").lower() != "true":
         return
 
-    # Fixed operational schedule in Europe/London.
-    # Runs on the hour from 08:00 through 18:00, Monday-Friday.
-    # This avoids the schedule drifting when Render restarts.
     tz = os.getenv("TIMEZONE","Europe/London")
     hours = os.getenv("REFRESH_HOURS","8-18").strip()
 
-    sched = BackgroundScheduler(timezone=tz)
-    sched.add_job(
+    scheduler = BackgroundScheduler(timezone=tz)
+    scheduler.add_job(
         do_refresh,
         "cron",
         day_of_week="mon-fri",
@@ -328,9 +404,14 @@ def start_scheduler():
         max_instances=1,
         coalesce=True
     )
-    sched.start()
+    scheduler.start()
+
+@app.on_event("startup")
+def startup_tasks():
+    start_scheduler()
+    if not _snapshot_is_fresh():
+        _start_refresh_background("service startup found stale or missing snapshot")
 
 if __name__ == "__main__":
-    start_scheduler()
     port = int(os.getenv("PORT","8000"))
     uvicorn.run(app, host="0.0.0.0", port=port)
