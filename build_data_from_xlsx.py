@@ -236,16 +236,34 @@ def as_int(v):
     except:return 0
 
 
+def depot_code(v):
+    """Normalize depot codes for comparison only.
+
+    TPN commonly exports depot 8 as "008" even though the grid filter is entered
+    as 8.  Preserve the original value for display, but compare numeric depot
+    codes without leading zeroes.
+    """
+    s = str(v or "").strip()
+    if not s:
+        return ""
+    try:
+        return str(int(float(s)))
+    except Exception:
+        return s.lstrip("0") or "0"
+
+
 def build(infile,outfile):
     (sheet,rows),fmt=detect_and_parse(infile)
     data=[]; skipped=0
     for r in rows:
         req=first(r,"Req","Request")
         deliver_raw=first(r,"Del","Deliver","Delivery Depot")
-        # Apply only when those fields are present. This preserves compatibility
-        # with exports that are already pre-filtered.
-        if req and req != "8": skipped+=1; continue
-        if deliver_raw == "8": skipped+=1; continue
+        # TPN exports depot numbers with leading zeroes (for example 008).
+        # The Browse UI filter is entered as 8, so compare normalized depot codes.
+        # Apply only when those fields are present to preserve compatibility with
+        # exports that were already filtered before download.
+        if req and depot_code(req) != "8": skipped+=1; continue
+        if deliver_raw and depot_code(deliver_raw) == "8": skipped+=1; continue
 
         docket=first(r,"Docket","Consignment","Consignment Number")
         sender=first(r,"Sender","Consignor")
@@ -265,8 +283,16 @@ def build(infile,outfile):
             "WDD":service in MAIN_SERVICES and status=="WDD",
             "Undelivered":service in MAIN_SERVICES and status!="DEL"
         })
+    if rows and not data:
+        raise RuntimeError(
+            f"TPN export contained {len(rows)} rows but none survived Req=8 / Del!=8. "
+            "Refusing to overwrite the existing dashboard with zero rows."
+        )
+
     snap={"source":Path(infile).name,"source_format":fmt,"sheet":sheet,
-          "generated_at":datetime.now().astimezone().isoformat(timespec="seconds"),"rows":data}
+          "generated_at":datetime.now().astimezone().isoformat(timespec="seconds"),
+          "filter":{"request_depot":"8","delivery_depot_not":"8","input_rows":len(rows),"skipped":skipped},
+          "rows":data}
     Path(outfile).write_text("window.TPN_SNAPSHOT = "+json.dumps(snap,ensure_ascii=False)+";\n",encoding="utf-8")
     print(f"Updated {outfile} from {infile} [{fmt}]: {len(data)} consignments after Req=8 / Del!=8 filter; skipped {skipped}")
 
