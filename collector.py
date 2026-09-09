@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json, os, subprocess, sys
+import json, os, subprocess, sys, gc
 from datetime import date, timedelta
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -153,8 +153,41 @@ def run_collection(stage_callback=None) -> dict:
 
     with sync_playwright() as p:
         stage("Starting browser")
-        browser = p.chromium.launch(headless=headless)
-        page = browser.new_page(accept_downloads=True)
+        browser = p.chromium.launch(
+            headless=headless,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-extensions",
+                "--disable-background-networking",
+                "--disable-background-timer-throttling",
+                "--disable-renderer-backgrounding",
+                "--disable-component-update",
+                "--disable-default-apps",
+                "--disable-sync",
+                "--disable-translate",
+                "--metrics-recording-only",
+                "--no-first-run",
+                "--renderer-process-limit=1",
+                "--disable-features=BackForwardCache,MediaRouter,OptimizationHints,Translate",
+            ],
+        )
+        context = browser.new_context(
+            accept_downloads=True,
+            viewport={"width": 1280, "height": 900},
+        )
+        page = context.new_page()
+
+        # Reduce memory/network pressure on small Render instances. TPN's controls
+        # are HTML/CSS/JS, so media and decorative images/fonts are not required.
+        def block_heavy_assets(route):
+            if route.request.resource_type in {"image", "media", "font"}:
+                route.abort()
+            else:
+                route.continue_()
+        page.route("**/*", block_heavy_assets)
         page.set_default_timeout(12000)
         page.set_default_navigation_timeout(30000)
         try:
@@ -299,4 +332,12 @@ def run_collection(stage_callback=None) -> dict:
                 pass
             raise
         finally:
-            browser.close()
+            try:
+                context.close()
+            except Exception:
+                pass
+            try:
+                browser.close()
+            except Exception:
+                pass
+            gc.collect()

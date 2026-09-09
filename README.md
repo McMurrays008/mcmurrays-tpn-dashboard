@@ -96,3 +96,20 @@ host's access control, Cloudflare Access, or another organisation-approved login
 private-network layer.
 
 This package intentionally does not store TPN credentials in the browser or HTML.
+
+
+## Browser-based manual refresh page
+
+This version adds:
+
+`/admin-refresh`
+
+Open that URL in a normal browser, enter the Render `REFRESH_TOKEN`, and click
+**Run TPN Refresh Now**.
+
+No curl/Postman is required.
+
+Example:
+`https://YOUR-SERVICE.onrender.com/admin-refresh`
+
+The token is submitted to the service for validation and is not persisted by the page.

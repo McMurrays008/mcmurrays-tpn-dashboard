@@ -12,17 +12,53 @@ import uvicorn
 from collector import run_collection
 
 HERE = Path(__file__).resolve().parent
+STATUS_FILE = HERE / "tpn_run_status.json"
 load_dotenv(HERE/".env")
 
 app = FastAPI(title="TPN Dashboard Automation")
 lock = threading.Lock()
-status = {
-    "last_attempt": None,
-    "last_success": None,
-    "last_error": None,
-    "running": False,
-    "current_stage": "Idle"
-}
+
+def _default_status():
+    return {
+        "last_attempt": None,
+        "last_success": None,
+        "last_error": None,
+        "running": False,
+        "current_stage": "Idle",
+    }
+
+def _save_status():
+    """Persist diagnostics so a process restart does not erase the last stage."""
+    try:
+        tmp = STATUS_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(status, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(STATUS_FILE)
+    except Exception as exc:
+        print(f"[status] Could not persist status: {exc}", flush=True)
+
+def _load_status():
+    st = _default_status()
+    if not STATUS_FILE.exists():
+        return st
+    try:
+        previous = json.loads(STATUS_FILE.read_text(encoding="utf-8"))
+        if isinstance(previous, dict):
+            st.update({k: previous.get(k) for k in st.keys() if k in previous})
+            if previous.get("running"):
+                previous_stage = previous.get("current_stage") or "Unknown stage"
+                st["running"] = False
+                st["current_stage"] = f"Service restarted after: {previous_stage}"
+                if not previous.get("last_error"):
+                    st["last_error"] = (
+                        "Previous refresh ended because the service process restarted "
+                        f"while at stage: {previous_stage}"
+                    )
+    except Exception as exc:
+        st["last_error"] = f"Could not read previous status file: {exc}"
+    return st
+
+status = _load_status()
+_save_status()
 
 def do_refresh():
     if not lock.acquire(blocking=False):
@@ -30,21 +66,30 @@ def do_refresh():
     status["running"] = True
     status["current_stage"] = "Starting"
     status["last_attempt"] = datetime.now().astimezone().isoformat(timespec="seconds")
+    _save_status()
+    print(f"[refresh] Started at {status['last_attempt']}", flush=True)
     try:
         def update_stage(name):
             status["current_stage"] = name
+            _save_status()
+            print(f"[refresh] Stage: {name}", flush=True)
         result = run_collection(stage_callback=update_stage)
         status["last_success"] = datetime.now().astimezone().isoformat(timespec="seconds")
         status["last_error"] = None
         status["current_stage"] = "Completed"
+        _save_status()
+        print(f"[refresh] Completed at {status['last_success']}", flush=True)
         return result
     except Exception as e:
         status["last_error"] = f"{type(e).__name__}: {e}"
         if status.get("current_stage") != "Failed":
             status["current_stage"] = "Failed"
+        _save_status()
+        print(f"[refresh] ERROR: {status['last_error']}", flush=True)
         raise
     finally:
         status["running"] = False
+        _save_status()
         lock.release()
 
 @app.get("/")
