@@ -171,12 +171,14 @@ def run_collection(stage_callback=None) -> dict:
                 "--metrics-recording-only",
                 "--no-first-run",
                 "--renderer-process-limit=1",
-                "--disable-features=BackForwardCache,MediaRouter,OptimizationHints,Translate",
+                "--disable-software-rasterizer",
+                "--mute-audio",
+                "--disable-features=BackForwardCache,MediaRouter,OptimizationHints,Translate,IsolateOrigins,site-per-process",
             ],
         )
         context = browser.new_context(
             accept_downloads=True,
-            viewport={"width": 1280, "height": 900},
+            viewport={"width": 1024, "height": 700},
         )
         page = context.new_page()
 
@@ -255,7 +257,6 @@ def run_collection(stage_callback=None) -> dict:
 
             # Confirmed workflow
             stage("Opening Browse")
-            page.screenshot(path=str(HERE/"tpn_stage_after_login.png"), full_page=True)
             click_named(page, "Browse", exact=True)
             page.wait_for_timeout(800)
 
@@ -278,14 +279,15 @@ def run_collection(stage_callback=None) -> dict:
             page.wait_for_load_state("networkidle", timeout=60000)
             page.wait_for_timeout(800)
 
-            stage("Filtering Req = 8")
-            set_grid_filter(page, "Req", "Is equal to", "8")
-            stage("Filtering Del != 8")
-            set_grid_filter(page, "Del", "Is not equal to", "8")
+            # v10 deliberately avoids opening Telerik/Kendo grid filter menus.
+            # Those interactions were the point where the free Render instance repeatedly
+            # restarted. Export the last-working-day result set, then apply Req=8 and Del!=8
+            # locally while building data.js.
+            stage("Preparing unfiltered export")
 
             rows = page.locator(".k-grid-content tbody tr, table tbody tr")
             if rows.count() == 0:
-                raise RuntimeError("Filtered grid has no results; export stopped.")
+                raise RuntimeError("Browse grid has no results; export stopped.")
 
             export = None
             for loc in [
@@ -324,7 +326,7 @@ def run_collection(stage_callback=None) -> dict:
             }
         except Exception:
             stage("Failed")
-            page.screenshot(path=str(HERE/"tpn_failure.png"), full_page=True)
+            page.screenshot(path=str(HERE/"tpn_failure.png"), full_page=False)
             (HERE/"tpn_failure_url.txt").write_text(page.url, encoding="utf-8")
             try:
                 (HERE/"tpn_failure_html.html").write_text(page.content(), encoding="utf-8")

@@ -15,6 +15,7 @@ HERE = Path(__file__).resolve().parent
 STATUS_FILE = HERE / "tpn_run_status.json"
 load_dotenv(HERE/".env")
 
+APP_VERSION = "v10-no-grid-filter-low-memory"
 app = FastAPI(title="TPN Dashboard Automation")
 lock = threading.Lock()
 
@@ -108,9 +109,30 @@ def data_js():
         headers={"Cache-Control":"no-store, max-age=0"}
     )
 
+def _memory_info():
+    info = {}
+    try:
+        for line in Path("/proc/self/status").read_text().splitlines():
+            if line.startswith("VmRSS:"):
+                info["process_rss_mb"] = round(int(line.split()[1]) / 1024, 1)
+                break
+    except Exception:
+        pass
+    for name, key in (("/sys/fs/cgroup/memory.current", "container_current_mb"),
+                      ("/sys/fs/cgroup/memory.max", "container_limit_mb")):
+        try:
+            value = Path(name).read_text().strip()
+            if value != "max":
+                info[key] = round(int(value) / 1024 / 1024, 1)
+            else:
+                info[key] = "max"
+        except Exception:
+            pass
+    return info
+
 @app.get("/health")
 def health():
-    return JSONResponse({"service":"tpn-dashboard","status":status})
+    return JSONResponse({"service":"tpn-dashboard","version":APP_VERSION,"status":status,"memory":_memory_info()})
 
 @app.post("/refresh")
 def refresh(x_refresh_token: str | None = Header(default=None)):
@@ -265,15 +287,16 @@ def failure_screenshot(x_refresh_token: str | None = Header(default=None)):
 def start_scheduler():
     if os.getenv("ENABLE_SCHEDULER","true").lower() != "true":
         return
-    minutes = max(5, int(os.getenv("REFRESH_MINUTES","15")))
+    minutes = max(5, int(os.getenv("REFRESH_MINUTES","60")))
     tz = os.getenv("TIMEZONE","Europe/London")
     sched = BackgroundScheduler(timezone=tz)
+    minute_rule = "0" if minutes >= 60 else f"*/{minutes}"
     sched.add_job(
         do_refresh,
         "cron",
         day_of_week="mon-fri",
         hour="6-19",
-        minute=f"*/{minutes}",
+        minute=minute_rule,
         id="tpn_refresh",
         max_instances=1,
         coalesce=True

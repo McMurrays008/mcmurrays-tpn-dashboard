@@ -102,7 +102,19 @@ def as_int(v):
 def build(xlsx,outfile):
     sheet,rows=pick_table(xlsx)
     data=[]
+    skipped=0
     for r in rows:
+        # Reproduce the TPN Browse filters locally to avoid opening the heavy grid filter UI:
+        # Req = 8 AND Del != 8. Current exports may use either short or long column names.
+        req=first(r,"Req","Request")
+        deliver_raw=first(r,"Del","Deliver","Delivery Depot")
+        if req and req != "8":
+            skipped += 1
+            continue
+        if deliver_raw == "8":
+            skipped += 1
+            continue
+
         docket=first(r,"Docket","Consignment","Consignment Number")
         sender=first(r,"Sender","Consignor")
         service=first(r,"Service")
@@ -124,7 +136,7 @@ def build(xlsx,outfile):
     snap={"source":Path(xlsx).name,"sheet":sheet,
           "generated_at":datetime.now().astimezone().isoformat(timespec="seconds"),"rows":data}
     Path(outfile).write_text("window.TPN_SNAPSHOT = "+json.dumps(snap,ensure_ascii=False)+";\n",encoding="utf-8")
-    print(f"Updated {outfile} from {xlsx}: {len(data)} consignments")
+    print(f"Updated {outfile} from {xlsx}: {len(data)} consignments after Req=8 / Del!=8 filter; skipped {skipped}")
 if __name__=="__main__":
     if len(sys.argv)!=3:raise SystemExit("Usage: python build_data_from_xlsx.py export.xlsx data.js")
     build(sys.argv[1],sys.argv[2])
