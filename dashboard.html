@@ -25,7 +25,7 @@ button{font:inherit;border:0;background:var(--accent);color:#fff;border-radius:9
 <body>
 <header>
 <h1>TPN Operations Dashboard</h1>
-<p id="snap">Loading latest TPN snapshot…</p>
+<p id="snap">Loading latest TPN snapshot…</p><p style="margin-top:5px">Automatic refresh: hourly at 08:00, 09:00, 10:00 … 18:00, Monday–Friday (Europe/London).</p>
 <div class="userbar">
 <span class="userlabel">Current user:</span>
 <input id="ackUser" placeholder="Enter your name">
@@ -59,9 +59,11 @@ button{font:inherit;border:0;background:var(--accent);color:#fff;border-radius:9
 <h2>Consignment grid</h2>
 <div class="toolbar">
 <input id="search" type="search" placeholder="Search docket, sender, consignee, postcode, depot…">
-<select id="serviceFilter"><option value="">All services</option></select>
 <select id="statusFilter"><option value="">All statuses</option></select>
+<select id="customerFilter"><option value="">All customers / senders</option></select>
+<select id="serviceFilter"><option value="">All services</option></select>
 <select id="depotFilter"><option value="">All depots</option></select>
+<select id="consigneeFilter"><option value="">All consignees</option></select>
 <select id="ackFilter"><option value="">All acknowledgement states</option><option value="ack">Acknowledged</option><option value="unack">Not acknowledged</option></select>
 <button id="clearFilters" class="secondary">Clear filters</button>
 <button id="reloadData" class="secondary">Reload latest data</button>
@@ -157,15 +159,19 @@ function renderDrill(){
 }
 function renderGrid(){
  const q=$("search").value.toLowerCase().trim();
- const sv=$("serviceFilter").value;
  const st=$("statusFilter").value;
+ const cu=$("customerFilter").value;
+ const sv=$("serviceFilter").value;
  const dp=$("depotFilter").value;
+ const co=$("consigneeFilter").value;
  const af=$("ackFilter").value;
  let r=cardFilter?rowsForCard(cardFilter):data;
  r=r.filter(x=>
-   (!sv||x.Service===sv)&&
    (!st||x.Status===st)&&
+   (!cu||x.Sender===cu)&&
+   (!sv||x.Service===sv)&&
    (!dp||x.DeliveryDepot===dp)&&
+   (!co||x.Consignee===co)&&
    (!af||(af==="ack"?isAck(x.Docket):!isAck(x.Docket)))&&
    (!q||[x.Docket,x.Sender,x.Service,x.Status,x.Consignee,x.Postcode,x.DeliveryDepot].join(" ").toLowerCase().includes(q))
  );
@@ -182,9 +188,11 @@ function fillSelect(id, values, label){
    .map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join("");
 }
 function populateFilters(){
- fillSelect("serviceFilter",data.map(x=>x.Service),"All services");
  fillSelect("statusFilter",data.map(x=>x.Status),"All statuses");
+ fillSelect("customerFilter",data.map(x=>x.Sender),"All customers / senders");
+ fillSelect("serviceFilter",data.map(x=>x.Service),"All services");
  fillSelect("depotFilter",data.map(x=>x.DeliveryDepot),"All depots");
+ fillSelect("consigneeFilter",data.map(x=>x.Consignee),"All consignees");
 }
 function showNotice(html){
  $("dataNotice").innerHTML=html;
@@ -227,9 +235,9 @@ document.querySelectorAll(".card").forEach(c=>c.onclick=()=>{
  renderAll();
 });
 $("closeDrill").onclick=()=>{cardFilter="";document.querySelectorAll(".card").forEach(x=>x.classList.remove("active"));renderAll()};
-["search","serviceFilter","statusFilter","depotFilter","ackFilter"].forEach(id=>$(id).addEventListener(id==="search"?"input":"change",renderGrid));
+["search","statusFilter","customerFilter","serviceFilter","depotFilter","consigneeFilter","ackFilter"].forEach(id=>$(id).addEventListener(id==="search"?"input":"change",renderGrid));
 $("clearFilters").onclick=()=>{
- cardFilter="";$("search").value="";$("serviceFilter").value="";$("statusFilter").value="";$("depotFilter").value="";$("ackFilter").value="";
+ cardFilter="";$("search").value="";$("statusFilter").value="";$("customerFilter").value="";$("serviceFilter").value="";$("depotFilter").value="";$("consigneeFilter").value="";$("ackFilter").value="";
  document.querySelectorAll(".card").forEach(x=>x.classList.remove("active"));renderAll();
 };
 $("reloadData").onclick=loadLatestData;

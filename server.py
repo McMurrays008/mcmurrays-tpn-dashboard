@@ -15,7 +15,7 @@ HERE = Path(__file__).resolve().parent
 STATUS_FILE = HERE / "tpn_run_status.json"
 load_dotenv(HERE/".env")
 
-APP_VERSION = "v12-dashboard-data-fix"
+APP_VERSION = "v13-fixed-hourly-filters"
 app = FastAPI(title="TPN Dashboard Automation")
 lock = threading.Lock()
 
@@ -309,16 +309,21 @@ def failure_screenshot(x_refresh_token: str | None = Header(default=None)):
 def start_scheduler():
     if os.getenv("ENABLE_SCHEDULER","true").lower() != "true":
         return
-    minutes = max(5, int(os.getenv("REFRESH_MINUTES","60")))
+
+    # Fixed operational schedule in Europe/London.
+    # Runs on the hour from 08:00 through 18:00, Monday-Friday.
+    # This avoids the schedule drifting when Render restarts.
     tz = os.getenv("TIMEZONE","Europe/London")
+    hours = os.getenv("REFRESH_HOURS","8-18").strip()
+
     sched = BackgroundScheduler(timezone=tz)
-    minute_rule = "0" if minutes >= 60 else f"*/{minutes}"
     sched.add_job(
         do_refresh,
         "cron",
         day_of_week="mon-fri",
-        hour="6-19",
-        minute=minute_rule,
+        hour=hours,
+        minute=0,
+        second=0,
         id="tpn_refresh",
         max_instances=1,
         coalesce=True
