@@ -305,8 +305,10 @@ def run_collection(stage_callback=None) -> dict:
                 raise RuntimeError("Could not find Export To Excel.")
 
             stage("Exporting Excel")
-            with page.expect_download(timeout=45000) as dli:
-                export.click()
+            # TPN can start the download while leaving a navigation pending.
+            # Capture the download without waiting for that navigation.
+            with page.expect_download(timeout=120000) as dli:
+                export.click(timeout=12000, no_wait_after=True)
             download = dli.value
             filename = download.suggested_filename
             if not filename.lower().endswith((".xlsx",".xls")):
