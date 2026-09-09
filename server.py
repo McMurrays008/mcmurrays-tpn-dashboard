@@ -15,7 +15,7 @@ HERE = Path(__file__).resolve().parent
 STATUS_FILE = HERE / "tpn_run_status.json"
 load_dotenv(HERE/".env")
 
-APP_VERSION = "v11-xls-support-low-memory"
+APP_VERSION = "v12-dashboard-data-fix"
 app = FastAPI(title="TPN Dashboard Automation")
 lock = threading.Lock()
 
@@ -130,9 +130,31 @@ def _memory_info():
             pass
     return info
 
+def _data_info():
+    p = HERE/"data.js"
+    info = {"exists": p.exists()}
+    if not p.exists():
+        return info
+    try:
+        txt = p.read_text(encoding="utf-8")
+        info["size_bytes"] = len(txt.encode("utf-8"))
+        marker = "window.TPN_SNAPSHOT = "
+        if txt.startswith(marker):
+            payload = txt[len(marker):].strip()
+            if payload.endswith(";"):
+                payload = payload[:-1]
+            snap = json.loads(payload)
+            rows = snap.get("rows") if isinstance(snap, dict) else None
+            info["source"] = snap.get("source") if isinstance(snap, dict) else None
+            info["generated_at"] = snap.get("generated_at") if isinstance(snap, dict) else None
+            info["rows"] = len(rows) if isinstance(rows, list) else None
+    except Exception as exc:
+        info["error"] = f"{type(exc).__name__}: {exc}"
+    return info
+
 @app.get("/health")
 def health():
-    return JSONResponse({"service":"tpn-dashboard","version":APP_VERSION,"status":status,"memory":_memory_info()})
+    return JSONResponse({"service":"tpn-dashboard","version":APP_VERSION,"status":status,"memory":_memory_info(),"data":_data_info()})
 
 @app.post("/refresh")
 def refresh(x_refresh_token: str | None = Header(default=None)):
