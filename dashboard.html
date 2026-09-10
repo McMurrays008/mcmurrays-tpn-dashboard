@@ -196,7 +196,10 @@ async function toggleAck(d){
  try{
    const resp=await fetch(ACK_API,{
      method:"POST",
-     headers:{"content-type":"application/json"},
+     mode:"cors",
+     credentials:"omit",
+     // text/plain is a CORS simple request, so the browser does not need an OPTIONS preflight.
+     headers:{"content-type":"text/plain;charset=UTF-8"},
      body:JSON.stringify({docket:k,action,user:u,note:""})
    });
    const payload=await resp.json().catch(()=>({}));

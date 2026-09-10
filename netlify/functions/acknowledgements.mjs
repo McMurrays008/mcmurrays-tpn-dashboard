@@ -1,26 +1,17 @@
 import { getStore } from '@netlify/blobs';
 
 const STORE_NAME = 'tpn-team-acknowledgements';
-const DEFAULT_ALLOWED_ORIGINS = ['https://mcmurrays-tpn-dashboard.onrender.com'];
-
-function allowedOrigins() {
-  const configured = (process.env.ACK_ALLOWED_ORIGINS || '')
-    .split(',')
-    .map(v => v.trim())
-    .filter(Boolean);
-  return configured.length ? configured : DEFAULT_ALLOWED_ORIGINS;
-}
 
 function corsHeaders(request) {
-  const origin = request.headers.get('origin') || '';
-  const allowed = allowedOrigins();
-  const allowOrigin = allowed.includes('*') ? '*' : (allowed.includes(origin) ? origin : allowed[0]);
+  // This endpoint contains no credentials/cookies and is intentionally callable
+  // by the Render-hosted dashboard. Using * avoids brittle origin matching and,
+  // together with text/plain POSTs from the dashboard, avoids browser preflight issues.
+  const requestedHeaders = request.headers.get('access-control-request-headers');
   return {
-    'access-control-allow-origin': allowOrigin,
+    'access-control-allow-origin': '*',
     'access-control-allow-methods': 'GET, POST, OPTIONS',
-    'access-control-allow-headers': 'content-type',
+    'access-control-allow-headers': requestedHeaders || 'content-type, accept',
     'access-control-max-age': '86400',
-    'vary': 'Origin',
     'cache-control': 'no-store',
   };
 }
@@ -28,7 +19,10 @@ function corsHeaders(request) {
 function json(request, body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json; charset=utf-8', ...corsHeaders(request) },
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      ...corsHeaders(request),
+    },
   });
 }
 
@@ -43,7 +37,6 @@ function safeDocket(value) {
 }
 
 function store() {
-  // Strong consistency helps acknowledgements appear promptly to other users.
   return getStore({ name: STORE_NAME, consistency: 'strong' });
 }
 
@@ -57,6 +50,16 @@ async function listCurrentAcks() {
     }
   }
   return result;
+}
+
+async function parseBody(request) {
+  const raw = await request.text();
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error('Invalid JSON body.');
+  }
 }
 
 export default async (request) => {
@@ -89,13 +92,7 @@ export default async (request) => {
 
   if (request.method === 'POST') {
     try {
-      let body;
-      try {
-        body = await request.json();
-      } catch {
-        return json(request, { ok: false, error: 'Invalid JSON body.' }, 400);
-      }
-
+      const body = await parseBody(request);
       const docket = safeDocket(body?.docket);
       const action = cleanText(body?.action, 20).toLowerCase();
       const user = cleanText(body?.user, 80);
@@ -118,18 +115,20 @@ export default async (request) => {
 
       const s = store();
       await s.setJSON(`current/${docket}`, record);
-
-      const auditKey = `audit/${docket}/${now.replace(/[:.]/g, '-')}-${crypto.randomUUID()}`;
-      await s.setJSON(auditKey, {
-        ...record,
-        action,
-        user_agent: cleanText(request.headers.get('user-agent'), 250),
-      });
+      await s.setJSON(
+        `audit/${docket}/${now.replace(/[:.]/g, '-')}-${crypto.randomUUID()}`,
+        {
+          ...record,
+          action,
+          user_agent: cleanText(request.headers.get('user-agent'), 250),
+        }
+      );
 
       return json(request, { ok: true, acknowledgement: record });
     } catch (error) {
       console.error('POST acknowledgement failed', error);
-      return json(request, { ok: false, error: 'Could not save acknowledgement.' }, 500);
+      const message = error?.message === 'Invalid JSON body.' ? error.message : 'Could not save acknowledgement.';
+      return json(request, { ok: false, error: message }, error?.message === 'Invalid JSON body.' ? 400 : 500);
     }
   }
 
