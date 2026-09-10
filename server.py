@@ -17,7 +17,7 @@ HERE = Path(__file__).resolve().parent
 STATUS_FILE = HERE / "tpn_run_status.json"
 load_dotenv(HERE/".env")
 
-APP_VERSION = "v19.2-render-ack-api-route"
+APP_VERSION = "v19.3-safe-diagnostics"
 app = FastAPI(title="TPN Dashboard Automation")
 lock = threading.Lock()
 

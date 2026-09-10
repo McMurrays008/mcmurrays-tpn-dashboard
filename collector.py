@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json, os, subprocess, sys, gc
+import json, os, subprocess, sys
 from datetime import date, timedelta
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -153,43 +153,8 @@ def run_collection(stage_callback=None) -> dict:
 
     with sync_playwright() as p:
         stage("Starting browser")
-        browser = p.chromium.launch(
-            headless=headless,
-            args=[
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",
-                "--disable-extensions",
-                "--disable-background-networking",
-                "--disable-background-timer-throttling",
-                "--disable-renderer-backgrounding",
-                "--disable-component-update",
-                "--disable-default-apps",
-                "--disable-sync",
-                "--disable-translate",
-                "--metrics-recording-only",
-                "--no-first-run",
-                "--renderer-process-limit=1",
-                "--disable-software-rasterizer",
-                "--mute-audio",
-                "--disable-features=BackForwardCache,MediaRouter,OptimizationHints,Translate,IsolateOrigins,site-per-process",
-            ],
-        )
-        context = browser.new_context(
-            accept_downloads=True,
-            viewport={"width": 1024, "height": 700},
-        )
-        page = context.new_page()
-
-        # Reduce memory/network pressure on small Render instances. TPN's controls
-        # are HTML/CSS/JS, so media and decorative images/fonts are not required.
-        def block_heavy_assets(route):
-            if route.request.resource_type in {"image", "media", "font"}:
-                route.abort()
-            else:
-                route.continue_()
-        page.route("**/*", block_heavy_assets)
+        browser = p.chromium.launch(headless=headless)
+        page = browser.new_page(accept_downloads=True)
         page.set_default_timeout(12000)
         page.set_default_navigation_timeout(30000)
         try:
@@ -257,6 +222,19 @@ def run_collection(stage_callback=None) -> dict:
 
             # Confirmed workflow
             stage("Opening Browse")
+            # Diagnostic screenshots must never be allowed to break the collection.
+            try:
+                page.screenshot(
+                    path=str(HERE/"tpn_stage_after_login.png"),
+                    full_page=False,
+                    timeout=5000,
+                )
+            except Exception as screenshot_error:
+                print(
+                    f"[diagnostic] Post-login screenshot skipped: "
+                    f"{type(screenshot_error).__name__}: {screenshot_error}",
+                    flush=True,
+                )
             click_named(page, "Browse", exact=True)
             page.wait_for_timeout(800)
 
@@ -279,15 +257,14 @@ def run_collection(stage_callback=None) -> dict:
             page.wait_for_load_state("networkidle", timeout=60000)
             page.wait_for_timeout(800)
 
-            # v10 deliberately avoids opening Telerik/Kendo grid filter menus.
-            # Those interactions were the point where the free Render instance repeatedly
-            # restarted. Export the last-working-day result set, then apply Req=8 and Del!=8
-            # locally while building data.js.
-            stage("Preparing unfiltered export")
+            stage("Filtering Req = 8")
+            set_grid_filter(page, "Req", "Is equal to", "8")
+            stage("Filtering Del != 8")
+            set_grid_filter(page, "Del", "Is not equal to", "8")
 
             rows = page.locator(".k-grid-content tbody tr, table tbody tr")
             if rows.count() == 0:
-                raise RuntimeError("Browse grid has no results; export stopped.")
+                raise RuntimeError("Filtered grid has no results; export stopped.")
 
             export = None
             for loc in [
@@ -305,16 +282,8 @@ def run_collection(stage_callback=None) -> dict:
                 raise RuntimeError("Could not find Export To Excel.")
 
             stage("Exporting Excel")
-            # TPN's legacy Telerik export button can remain "unstable" long
-            # enough for Playwright's normal actionability checks to time out,
-            # even though the element is visible. Capture the download and use
-            # a forced click so temporary layout movement/overlays do not block it.
-            with page.expect_download(timeout=120000) as dli:
-                try:
-                    export.click(timeout=15000, no_wait_after=True, force=True)
-                except Exception:
-                    # Final fallback: invoke the button's native DOM click.
-                    export.evaluate("el => el.click()")
+            with page.expect_download(timeout=45000) as dli:
+                export.click()
             download = dli.value
             filename = download.suggested_filename
             if not filename.lower().endswith((".xlsx",".xls")):
@@ -332,22 +301,44 @@ def run_collection(stage_callback=None) -> dict:
                 "date_text": date_text,
                 "download": target.name
             }
-        except Exception:
+        except Exception as original_error:
             stage("Failed")
-            page.screenshot(path=str(HERE/"tpn_failure.png"), full_page=False)
-            (HERE/"tpn_failure_url.txt").write_text(page.url, encoding="utf-8")
+
+            # Diagnostics are best-effort only. Most importantly, never let a
+            # screenshot timeout replace/mask the original TPN/Playwright error.
             try:
-                (HERE/"tpn_failure_html.html").write_text(page.content(), encoding="utf-8")
-            except Exception:
-                pass
-            raise
+                page.screenshot(
+                    path=str(HERE/"tpn_failure.png"),
+                    full_page=False,
+                    timeout=5000,
+                )
+            except Exception as screenshot_error:
+                print(
+                    f"[diagnostic] Failure screenshot skipped: "
+                    f"{type(screenshot_error).__name__}: {screenshot_error}",
+                    flush=True,
+                )
+
+            try:
+                (HERE/"tpn_failure_url.txt").write_text(page.url, encoding="utf-8")
+            except Exception as url_error:
+                print(
+                    f"[diagnostic] Failure URL capture skipped: "
+                    f"{type(url_error).__name__}: {url_error}",
+                    flush=True,
+                )
+
+            try:
+                (HERE/"tpn_failure_html.html").write_text(
+                    page.content(), encoding="utf-8"
+                )
+            except Exception as html_error:
+                print(
+                    f"[diagnostic] Failure HTML capture skipped: "
+                    f"{type(html_error).__name__}: {html_error}",
+                    flush=True,
+                )
+
+            raise original_error
         finally:
-            try:
-                context.close()
-            except Exception:
-                pass
-            try:
-                browser.close()
-            except Exception:
-                pass
-            gc.collect()
+            browser.close()
