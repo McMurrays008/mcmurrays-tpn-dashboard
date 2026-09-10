@@ -257,14 +257,18 @@ def run_collection(stage_callback=None) -> dict:
             page.wait_for_load_state("networkidle", timeout=60000)
             page.wait_for_timeout(800)
 
-            stage("Filtering Req = 8")
-            set_grid_filter(page, "Req", "Is equal to", "8")
-            stage("Filtering Del != 8")
-            set_grid_filter(page, "Del", "Is not equal to", "8")
+            # Do NOT apply Req/Del filters in the TPN browser grid.
+            # The TPN/Kendo grid filter controls have proven unreliable in the
+            # hosted browser. Export the complete Browse result for the target
+            # day, then let build_data_from_xlsx.py apply the authoritative
+            # local filter:
+            #   Req / Request = depot 8 (including "008" / "8.0")
+            #   Del / Deliver != depot 8
+            stage("Preparing unfiltered Browse export")
 
             rows = page.locator(".k-grid-content tbody tr, table tbody tr")
             if rows.count() == 0:
-                raise RuntimeError("Filtered grid has no results; export stopped.")
+                raise RuntimeError("Browse grid has no results; export stopped.")
 
             export = None
             for loc in [
@@ -282,8 +286,11 @@ def run_collection(stage_callback=None) -> dict:
                 raise RuntimeError("Could not find Export To Excel.")
 
             stage("Exporting Excel")
-            with page.expect_download(timeout=45000) as dli:
-                export.click()
+            with page.expect_download(timeout=120000) as dli:
+                try:
+                    export.click(timeout=15000, no_wait_after=True, force=True)
+                except Exception:
+                    export.evaluate("el => el.click()")
             download = dli.value
             filename = download.suggested_filename
             if not filename.lower().endswith((".xlsx",".xls")):
