@@ -35,6 +35,24 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 @media(max-width:1260px){.headerrow{grid-template-columns:330px 1fr 240px 235px}.cards{grid-template-columns:repeat(3,1fr)}.toolbar{grid-template-columns:1.5fr 1fr 1fr}.chartbody{grid-template-columns:1fr}.legend{max-width:360px;margin:auto;width:100%}}
 @media(max-width:900px){.headerrow{grid-template-columns:1fr;gap:10px;padding:13px 18px}.brand-left{height:auto}.brand-left img{max-width:500px;height:70px}.brand-center{text-align:center}.brand-right,.header-tools{justify-content:center}.subbar{justify-content:center;flex-wrap:wrap}.summarygrid,.chartgrid{grid-template-columns:1fr}.toolbar{grid-template-columns:1fr 1fr}.cards{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:580px){.wrap{padding:14px 12px 20px}.cards{grid-template-columns:1fr}.toolbar{grid-template-columns:1fr}.subbar{padding:8px 12px}.panel{padding:11px}.gridpanel{padding:0}.card{min-height:115px}.headerrow{padding-left:12px;padding-right:12px}}
+
+.centered-topbar{
+  max-width:1100px;
+  margin:14px auto 16px;
+  justify-content:center;
+  border-radius:14px;
+  border:1px solid #dce6f0;
+  box-shadow:0 4px 14px rgba(13,54,91,.08);
+}
+.card.delivered .big{color:#159447}
+.card.delivered.active{border-color:#159447;box-shadow:0 0 0 2px rgba(21,148,71,.14)}
+@media(max-width:900px){.centered-topbar{max-width:none;margin:10px 0 14px}}
+
+
+@media(min-width:1200px){
+  .cards{grid-template-columns:repeat(6,minmax(0,1fr))}
+  .card{min-width:0}
+}
 </style>
 
 </head>
@@ -51,7 +69,10 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
   </div>
 </header>
 
-<div class="topbar">
+<main class="wrap">
+<div id="dataNotice" class="notice hidden"></div>
+
+<section class="topbar centered-topbar" aria-label="Dashboard controls">
   <div class="updatebox"><strong>Last updated</strong><span id="lastUpdated">Loading…</span></div>
   <button id="reloadData" class="reload">↻&nbsp; Reload latest data</button>
   <div class="userbox">
@@ -61,11 +82,7 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
   </div>
   <span id="userStatus" class="userlabel"></span>
   <span id="ackSyncStatus" class="userlabel">Team acknowledgements: connecting…</span>
-</div>
-
-
-<main class="wrap">
-<div id="dataNotice" class="notice hidden"></div>
+</section>
 
 
 <section class="cards">
@@ -84,6 +101,10 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 <button class="card wdd" data-filter="wdd">
   <span class="iconbubble" aria-hidden="true"><svg viewBox="0 0 64 64"><path d="M32 6L60 55H4L32 6z" fill="#f5a000"/><rect x="29" y="21" width="6" height="20" rx="3" fill="#fff"/><circle cx="32" cy="48" r="3.5" fill="#fff"/></svg></span>
   <span class="cardcopy"><span class="label">WDD Risk</span><span class="big" id="wddCount">0</span><span class="sub" id="wddSub"></span></span>
+</button>
+<button class="card delivered" data-filter="delivered">
+  <span class="iconbubble" aria-hidden="true"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="#159447"/><path d="M18 33l9 9 19-21" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+  <span class="cardcopy"><span class="label">Delivered</span><span class="big" id="deliveredCount">0</span><span class="sub" id="deliveredSub">Core services delivered</span></span>
 </button>
 <button class="card undelivered" data-filter="undelivered">
   <span class="iconbubble" aria-hidden="true"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="#5f7288"/><path d="M22 19v17l12 8" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><path d="M40 18h9v9" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/></svg></span>
@@ -213,15 +234,21 @@ async function toggleAck(d){
  }
 }
 
+const CORE_SERVICES=new Set(["AM","AMTL","BKSL","BSTL","ND","NDTL","PM","PMTL","TIME","TMTL"]);
+function isCoreDelivered(x){
+ return CORE_SERVICES.has(String(x.Service||"").trim().toUpperCase()) &&
+        String(x.Status||"").trim().toUpperCase()==="DEL";
+}
 function rowsForCard(n){
  if(n==="live")return data.filter(x=>x.Live);
  if(n==="risk")return data.filter(x=>x.Risk);
  if(n==="noscans")return data.filter(x=>x.NoScans);
  if(n==="wdd")return data.filter(x=>x.WDD);
+ if(n==="delivered")return data.filter(isCoreDelivered);
  if(n==="undelivered")return data.filter(x=>x.Undelivered);
  return data;
 }
-function title(n){return{live:"Total Live consignments",risk:"Risk consignments",noscans:"Jobs with No Scans",wdd:"WDD Risk consignments",undelivered:"Undelivered consignments"}[n]||""}
+function title(n){return{live:"Total Live consignments",risk:"Risk consignments",noscans:"Jobs with No Scans",wdd:"WDD Risk consignments",delivered:"Delivered core-service consignments",undelivered:"Undelivered consignments"}[n]||""}
 function ackCell(x){
  const d=isAck(x.Docket);
  const busy=ackBusy.has(String(x.Docket));
@@ -237,6 +264,7 @@ function renderCards(){
    ["risk","riskCount","riskSub","standard risk statuses, excluding CRE"],
    ["noscans","noscansCount","noscansSub","status CRE"],
    ["wdd","wddCount","wddSub","WDD in core services"],
+   ["delivered","deliveredCount","deliveredSub","core services, status DEL"],
    ["undelivered","undeliveredCount","undeliveredSub","core services, status ≠ DEL"]
  ]){
    const r=rowsForCard(n);
