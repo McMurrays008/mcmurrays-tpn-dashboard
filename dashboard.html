@@ -53,6 +53,20 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
   .cards{grid-template-columns:repeat(6,minmax(0,1fr))}
   .card{min-width:0}
 }
+
+.filters-locked input,
+.filters-locked select{
+  opacity:.55;
+  cursor:not-allowed;
+  background:#f3f6f9;
+}
+.filterhint{
+  margin:0 0 10px;
+  font-size:.92rem;
+  color:#5f7288;
+  text-align:center;
+}
+.filterhint strong{color:#0d365b}
 </style>
 
 </head>
@@ -115,6 +129,8 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 
 <section class="panel gridpanel">
 <div class="gridhead"><h2>Consignment Grid</h2></div>
+<div id="filterHint" class="filterhint"><strong>Select a headline above</strong> to unlock filters for that relevant set of consignments.</div>
+<div id="filterArea" class="filters-locked">
 <div class="toolbar">
 <input id="search" type="search" placeholder="Search docket, sender, consignee, postcode, depot…">
 <select id="statusFilter"><option value="">All statuses</option></select>
@@ -126,6 +142,7 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 <div class="toolbar2">
 <select id="ackFilter"><option value="">All acknowledgement states</option><option value="ack">Acknowledged</option><option value="unack">Not acknowledged</option></select>
 <button id="clearFilters" class="secondary">Clear filters</button>
+</div>
 </div>
 <div id="resultMeta" class="meta"></div>
 <div class="tablewrap"><table class="data"><thead><tr><th>Docket</th><th>Sender</th><th>Service</th><th>Status</th><th>Pallets</th><th>Consignee</th><th>Postcode</th><th>Delivery Depot</th><th>Customer Advised</th></tr></thead><tbody id="gridBody"></tbody></table></div>
@@ -338,18 +355,70 @@ function renderGrid(){
 }
 function renderAll(){renderCards();renderSummaries();renderGrid()}
 
-function fillSelect(id, values, label){
+function fillSelect(id, values, label, keepValue=true){
  const el=$(id);
+ const previous=keepValue?el.value:"";
+ const options=[...new Set(values.filter(Boolean))]
+   .sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
  el.innerHTML=`<option value="">${label}</option>`+
-   [...new Set(values.filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}))
-   .map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join("");
+   options.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join("");
+ if(previous && options.includes(previous)) el.value=previous;
+ else el.value="";
 }
-function populateFilters(){
- fillSelect("statusFilter",data.map(x=>x.Status),"All statuses");
- fillSelect("customerFilter",data.map(x=>x.Sender),"All customers / senders");
- fillSelect("serviceFilter",data.map(x=>x.Service),"All services");
- fillSelect("depotFilter",data.map(x=>x.DeliveryDepot),"All depots");
- fillSelect("consigneeFilter",data.map(x=>x.Consignee),"All consignees");
+function setFilterLock(){
+ const locked=!cardFilter;
+ $("filterArea").classList.toggle("filters-locked",locked);
+ ["search","statusFilter","customerFilter","serviceFilter","depotFilter","consigneeFilter","ackFilter"]
+   .forEach(id=>$(id).disabled=locked);
+ $("search").placeholder=locked
+   ?"Select a headline first to search relevant consignments"
+   :"Search docket, sender, consignee, postcode, depot…";
+ $("filterHint").innerHTML=locked
+   ?"<strong>Select a headline above</strong> to unlock filters for that relevant set of consignments."
+   :`Filters now show only values relevant to <strong>${esc(title(cardFilter))}</strong>.`;
+}
+function filteredForOptions(excludeId){
+ let r=cardFilter?rowsForCard(cardFilter):[];
+ const st=excludeId==="statusFilter"?"":$("statusFilter").value;
+ const cu=excludeId==="customerFilter"?"":$("customerFilter").value;
+ const sv=excludeId==="serviceFilter"?"":$("serviceFilter").value;
+ const dp=excludeId==="depotFilter"?"":$("depotFilter").value;
+ const co=excludeId==="consigneeFilter"?"":$("consigneeFilter").value;
+ const af=excludeId==="ackFilter"?"":$("ackFilter").value;
+ return r.filter(x=>
+   (!st||x.Status===st)&&
+   (!cu||x.Sender===cu)&&
+   (!sv||x.Service===sv)&&
+   (!dp||x.DeliveryDepot===dp)&&
+   (!co||x.Consignee===co)&&
+   (!af||(af==="ack"?isAck(x.Docket):!isAck(x.Docket)))
+ );
+}
+function populateFilters(reset=false){
+ setFilterLock();
+ if(!cardFilter){
+   fillSelect("statusFilter",[],"All statuses",false);
+   fillSelect("customerFilter",[],"All customers / senders",false);
+   fillSelect("serviceFilter",[],"All services",false);
+   fillSelect("depotFilter",[],"All depots",false);
+   fillSelect("consigneeFilter",[],"All consignees",false);
+   if(reset)$("ackFilter").value="";
+   return;
+ }
+ if(reset){
+   $("search").value="";
+   $("statusFilter").value="";
+   $("customerFilter").value="";
+   $("serviceFilter").value="";
+   $("depotFilter").value="";
+   $("consigneeFilter").value="";
+   $("ackFilter").value="";
+ }
+ fillSelect("statusFilter",filteredForOptions("statusFilter").map(x=>x.Status),"All statuses");
+ fillSelect("customerFilter",filteredForOptions("customerFilter").map(x=>x.Sender),"All customers / senders");
+ fillSelect("serviceFilter",filteredForOptions("serviceFilter").map(x=>x.Service),"All services");
+ fillSelect("depotFilter",filteredForOptions("depotFilter").map(x=>x.DeliveryDepot),"All depots");
+ fillSelect("consigneeFilter",filteredForOptions("consigneeFilter").map(x=>x.Consignee),"All consignees");
 }
 function showNotice(html){
  $("dataNotice").innerHTML=html;
@@ -407,12 +476,18 @@ document.querySelectorAll(".card[data-filter]").forEach(c=>c.onclick=()=>{
  const next=c.dataset.filter;
  cardFilter=(cardFilter===next)?"":next;
  document.querySelectorAll(".card[data-filter]").forEach(x=>x.classList.toggle("active",x.dataset.filter===cardFilter));
+ populateFilters(true);
  renderAll();
 });
-["search","statusFilter","customerFilter","serviceFilter","depotFilter","consigneeFilter","ackFilter"].forEach(id=>$(id).addEventListener(id==="search"?"input":"change",renderGrid));
+$("search").addEventListener("input",renderGrid);
+["statusFilter","customerFilter","serviceFilter","depotFilter","consigneeFilter","ackFilter"].forEach(id=>$(id).addEventListener("change",()=>{
+ populateFilters(false);
+ renderGrid();
+}));
 $("clearFilters").onclick=()=>{
- cardFilter="";$("search").value="";$("statusFilter").value="";$("customerFilter").value="";$("serviceFilter").value="";$("depotFilter").value="";$("consigneeFilter").value="";$("ackFilter").value="";
- document.querySelectorAll(".card").forEach(x=>x.classList.remove("active"));renderAll();
+ $("search").value="";$("statusFilter").value="";$("customerFilter").value="";$("serviceFilter").value="";$("depotFilter").value="";$("consigneeFilter").value="";$("ackFilter").value="";
+ populateFilters(false);
+ renderAll();
 };
 $("reloadData").onclick=loadLatestData;
 $("saveUser").onclick=()=>setUser($("ackUser").value);
