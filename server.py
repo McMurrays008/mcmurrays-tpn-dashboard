@@ -17,7 +17,7 @@ HERE = Path(__file__).resolve().parent
 STATUS_FILE = HERE / "tpn_run_status.json"
 load_dotenv(HERE/".env")
 
-APP_VERSION = "v19.1-render-ack-direct-function"
+APP_VERSION = "v19.2-render-ack-api-route"
 app = FastAPI(title="TPN Dashboard Automation")
 lock = threading.Lock()
 
@@ -152,7 +152,7 @@ def do_refresh():
 # Render then talks server-to-server to Netlify, so browser CORS restrictions do not apply.
 ACK_UPSTREAM = os.getenv(
     "ACK_UPSTREAM_URL",
-    "https://meek-lollipop-ea9426.netlify.app/.netlify/functions/acknowledgements",
+    "https://meek-lollipop-ea9426.netlify.app/api/acknowledgements",
 ).strip()
 
 def _proxy_ack_request(method: str, body: bytes | None = None, query: str = ""):
