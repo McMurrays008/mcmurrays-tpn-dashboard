@@ -1,12 +1,13 @@
 from __future__ import annotations
 import json, os, threading
+import urllib.error, urllib.parse, urllib.request
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException, Form
+from fastapi import FastAPI, Header, HTTPException, Form, Request
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, RedirectResponse
 import uvicorn
 
@@ -16,7 +17,7 @@ HERE = Path(__file__).resolve().parent
 STATUS_FILE = HERE / "tpn_run_status.json"
 load_dotenv(HERE/".env")
 
-APP_VERSION = "v15-fresh-data-guard"
+APP_VERSION = "v19-render-ack-proxy"
 app = FastAPI(title="TPN Dashboard Automation")
 lock = threading.Lock()
 
@@ -145,6 +146,70 @@ def do_refresh():
         status["running"] = False
         _save_status()
         lock.release()
+
+
+# Shared acknowledgement service. Browser calls this Render service on the same origin;
+# Render then talks server-to-server to Netlify, so browser CORS restrictions do not apply.
+ACK_UPSTREAM = os.getenv(
+    "ACK_UPSTREAM_URL",
+    "https://meek-lollipop-ea9426.netlify.app/api/acknowledgements",
+).strip()
+
+def _proxy_ack_request(method: str, body: bytes | None = None, query: str = ""):
+    url = ACK_UPSTREAM
+    if query:
+        url = f"{url}?{query}"
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "mcmurrays-tpn-dashboard-render-proxy/1.0",
+    }
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, data=body, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            raw = resp.read()
+            code = int(getattr(resp, "status", 200))
+    except urllib.error.HTTPError as exc:
+        raw = exc.read()
+        code = int(exc.code)
+    except Exception as exc:
+        return JSONResponse(
+            {"ok": False, "error": f"Shared acknowledgement service unavailable: {type(exc).__name__}"},
+            status_code=502,
+            headers={"Cache-Control": "no-store, max-age=0"},
+        )
+    try:
+        payload = json.loads(raw.decode("utf-8")) if raw else {}
+    except Exception:
+        payload = {"ok": False, "error": "Invalid response from shared acknowledgement service."}
+        code = 502
+    return JSONResponse(
+        payload,
+        status_code=code,
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
+
+@app.get("/api/acknowledgements")
+def acknowledgement_list(docket: str | None = None, t: str | None = None):
+    params = {}
+    if docket:
+        params["docket"] = docket
+    # `t` is only a browser cache-buster; no need to send it upstream.
+    query = urllib.parse.urlencode(params)
+    return _proxy_ack_request("GET", query=query)
+
+@app.post("/api/acknowledgements")
+async def acknowledgement_save(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON body."}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"ok": False, "error": "Invalid JSON body."}, status_code=400)
+    encoded = json.dumps(body, ensure_ascii=False).encode("utf-8")
+    return _proxy_ack_request("POST", body=encoded)
+
 
 @app.get("/")
 def home():

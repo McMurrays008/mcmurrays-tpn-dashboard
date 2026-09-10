@@ -139,8 +139,8 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 
 <script>
 const USER_KEY="tpn_dashboard_current_user";
-// Shared team acknowledgement API on Netlify. Change this only if the Netlify site URL changes.
-const ACK_API="https://meek-lollipop-ea9426.netlify.app/api/acknowledgements";
+// Shared team acknowledgement API is proxied through this Render service to avoid browser cross-origin restrictions.
+const ACK_API="/api/acknowledgements";
 const ACK_POLL_MS=20000;
 let data=[];
 let snapshot=null;
@@ -196,10 +196,8 @@ async function toggleAck(d){
  try{
    const resp=await fetch(ACK_API,{
      method:"POST",
-     mode:"cors",
-     credentials:"omit",
-     // text/plain is a CORS simple request, so the browser does not need an OPTIONS preflight.
-     headers:{"content-type":"text/plain;charset=UTF-8"},
+     credentials:"same-origin",
+     headers:{"content-type":"application/json"},
      body:JSON.stringify({docket:k,action,user:u,note:""})
    });
    const payload=await resp.json().catch(()=>({}));
