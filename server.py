@@ -17,7 +17,7 @@ HERE = Path(__file__).resolve().parent
 STATUS_FILE = HERE / "tpn_run_status.json"
 load_dotenv(HERE/".env")
 
-APP_VERSION = "v19-render-ack-proxy"
+APP_VERSION = "v19.1-render-ack-direct-function"
 app = FastAPI(title="TPN Dashboard Automation")
 lock = threading.Lock()
 
@@ -152,7 +152,7 @@ def do_refresh():
 # Render then talks server-to-server to Netlify, so browser CORS restrictions do not apply.
 ACK_UPSTREAM = os.getenv(
     "ACK_UPSTREAM_URL",
-    "https://meek-lollipop-ea9426.netlify.app/api/acknowledgements",
+    "https://meek-lollipop-ea9426.netlify.app/.netlify/functions/acknowledgements",
 ).strip()
 
 def _proxy_ack_request(method: str, body: bytes | None = None, query: str = ""):
@@ -182,7 +182,19 @@ def _proxy_ack_request(method: str, body: bytes | None = None, query: str = ""):
     try:
         payload = json.loads(raw.decode("utf-8")) if raw else {}
     except Exception:
-        payload = {"ok": False, "error": "Invalid response from shared acknowledgement service."}
+        content_type = ""
+        try:
+            content_type = resp.headers.get("content-type", "") if 'resp' in locals() else ""
+        except Exception:
+            pass
+        snippet = raw.decode("utf-8", errors="replace")[:180].replace("\n", " ").strip()
+        payload = {
+            "ok": False,
+            "error": "Invalid response from shared acknowledgement service.",
+            "upstream_status": code,
+            "upstream_content_type": content_type,
+            "upstream_preview": snippet,
+        }
         code = 502
     return JSONResponse(
         payload,
