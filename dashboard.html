@@ -28,7 +28,7 @@ button{font:inherit;border:0;border-radius:8px;padding:9px 13px;cursor:pointer}
 .secondary{background:#e8f0f8;color:#173c67}.secondary:hover{background:#dde9f5}
 .reload{background:#fff;color:var(--blue);border:1px solid #c9d8e8;box-shadow:0 2px 7px rgba(15,55,95,.12);font-weight:600}
 .wrap{max-width:1540px;margin:auto;padding:8px 26px 28px}
-.notice{background:#fff4e5;border:1px solid #f0b429;padding:12px 14px;border-radius:9px;margin-bottom:12px}.notice strong{display:block;margin-bottom:3px}
+.notice{background:#fff4e5;border:1px solid #f0b429;padding:12px 14px;border-radius:9px;margin-bottom:12px}.notice strong{display:block;margin-bottom:3px}.notice.refreshing{background:#eaf4ff;border-color:#77afe3;color:#173f6b}
 .cards{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin:0 0 16px}
 .card{position:relative;min-height:108px;background:#fff;border:1px solid var(--line);border-radius:11px;padding:15px 15px 13px;text-align:left;color:var(--ink);box-shadow:0 2px 9px rgba(31,73,125,.07);cursor:pointer}
 .card:hover{border-color:#b8cde2;transform:translateY(-1px)}.card.active{outline:2px solid rgba(8,119,216,.28)}
@@ -86,6 +86,7 @@ footer{max-width:1540px;margin:0 auto;padding:14px 26px 23px;border-top:1px soli
     <button id="saveUser" class="secondary">Set name</button>
   </div>
   <span id="userStatus" class="userlabel"></span>
+  <span id="ackSyncStatus" class="userlabel">Team acknowledgements: connecting…</span>
 </div>
 
 
@@ -169,13 +170,17 @@ footer{max-width:1540px;margin:0 auto;padding:14px 26px 23px;border-top:1px soli
 </footer>
 
 <script>
-const ACK_KEY="tpn_dashboard_ack_shared_html";
 const USER_KEY="tpn_dashboard_current_user";
+// Shared team acknowledgement API on Netlify. Change this only if the Netlify site URL changes.
+const ACK_API="https://meek-lollipop-ea9426.netlify.app/api/acknowledgements";
+const ACK_POLL_MS=20000;
 let data=[];
 let snapshot=null;
 let cardFilter="";
 let ackState={};
-try{ackState=JSON.parse(localStorage.getItem(ACK_KEY)||"{}")}catch(e){ackState={}}
+let refreshRetryTimer=null;
+let ackPollTimer=null;
+let ackBusy=new Set();
 
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??"").replace(/[&<>"']/g,s=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[s]));
@@ -188,20 +193,55 @@ function setUser(n){
  $("ackUser").value=n;
  $("userStatus").textContent=n?`Acknowledgements stamped as ${n}`:"Enter a name before acknowledging";
 }
-function isAck(d){return!!ackState[String(d)]}
-function ackLabel(d){const a=ackState[String(d)];if(!a)return"";return`${a.user} · ${new Date(a.time).toLocaleString("en-GB")}`}
-function toggleAck(d){
- const k=String(d);
- if(ackState[k]){
-   if(!confirm(`Unacknowledge docket ${k}?`)) return;
-   delete ackState[k];
- }else{
-   const u=currentUser();
-   if(!u){alert("Please enter your name first.");$("ackUser").focus();return}
-   ackState[k]={user:u,time:new Date().toISOString()};
+function isAck(d){return!!ackState[String(d)]?.acknowledged}
+function ackLabel(d){const a=ackState[String(d)];if(!a?.acknowledged)return"";return`${a.user} · ${new Date(a.time).toLocaleString("en-GB")}${a.note?` · ${a.note}`:""}`}
+function setAckSyncStatus(text,ok=true){
+ const el=$("ackSyncStatus");
+ el.textContent=text;
+ el.style.color=ok?"#3d6b4d":"#a33b32";
+}
+async function loadAcknowledgements(showError=false){
+ try{
+   const resp=await fetch(`${ACK_API}?t=${Date.now()}`,{cache:"no-store"});
+   if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+   const payload=await resp.json();
+   if(!payload?.ok || typeof payload.acknowledgements!=="object") throw new Error("Invalid response");
+   ackState=payload.acknowledgements||{};
+   setAckSyncStatus("Team acknowledgements: connected",true);
+   renderAll();
+ }catch(err){
+   setAckSyncStatus("Team acknowledgements: unavailable",false);
+   if(showError) alert(`Shared acknowledgements could not be loaded: ${err.message}`);
  }
- localStorage.setItem(ACK_KEY,JSON.stringify(ackState));
+}
+async function toggleAck(d){
+ const k=String(d);
+ if(ackBusy.has(k)) return;
+ const u=currentUser();
+ if(!u){alert("Please enter your name first.");$("ackUser").focus();return}
+ const currentlyAcked=isAck(k);
+ if(currentlyAcked && !confirm(`Unacknowledge docket ${k}?`)) return;
+ const action=currentlyAcked?"unacknowledge":"acknowledge";
+ ackBusy.add(k);
  renderAll();
+ setAckSyncStatus("Team acknowledgements: saving…",true);
+ try{
+   const resp=await fetch(ACK_API,{
+     method:"POST",
+     headers:{"content-type":"application/json"},
+     body:JSON.stringify({docket:k,action,user:u,note:""})
+   });
+   const payload=await resp.json().catch(()=>({}));
+   if(!resp.ok || !payload?.ok) throw new Error(payload?.error||`HTTP ${resp.status}`);
+   ackState[k]=payload.acknowledgement;
+   setAckSyncStatus("Team acknowledgements: connected",true);
+ }catch(err){
+   setAckSyncStatus("Team acknowledgements: save failed",false);
+   alert(`Acknowledgement was not saved: ${err.message}`);
+ }finally{
+   ackBusy.delete(k);
+   renderAll();
+ }
 }
 
 function rowsForCard(n){
@@ -215,7 +255,8 @@ function rowsForCard(n){
 function title(n){return{live:"Total Live consignments",risk:"Risk consignments",noscans:"Jobs with No Scans",wdd:"WDD Risk consignments",undelivered:"Undelivered consignments"}[n]||""}
 function ackCell(x){
  const d=isAck(x.Docket);
- return `<td><button class="ackbtn ${d?"done":""}" data-ack="${esc(x.Docket)}">${d?"✓ Acknowledged — click to undo":"Acknowledge"}</button>${d?`<span class="acknote">${esc(ackLabel(x.Docket))}</span>`:""}</td>`;
+ const busy=ackBusy.has(String(x.Docket));
+ return `<td><button class="ackbtn ${d?"done":""}" data-ack="${esc(x.Docket)}" ${busy?"disabled":""}>${busy?"Saving…":(d?"✓ Acknowledged — click to undo":"Acknowledge")}</button>${d?`<span class="acknote">${esc(ackLabel(x.Docket))}</span>`:""}</td>`;
 }
 function row(x){return`<tr><td><strong>${esc(x.Docket)}</strong></td><td>${esc(x.Sender)}</td><td>${esc(x.Service)}</td><td><span class="badge">${esc(x.Status)}</span></td><td>${x.Pallets}</td><td>${esc(x.Consignee)}</td><td>${esc(x.Postcode)}</td><td>${esc(x.DeliveryDepot)}</td>${ackCell(x)}</tr>`}
 function wire(root){root.querySelectorAll("[data-ack]").forEach(b=>b.onclick=()=>toggleAck(b.dataset.ack))}
@@ -332,10 +373,21 @@ function hideNotice(){$("dataNotice").classList.add("hidden")}
 
 async function loadLatestData(){
  $("reloadData").disabled=true;
- $("lastUpdated").textContent="Loading…";
- hideNotice();
+ if(refreshRetryTimer){clearTimeout(refreshRetryTimer);refreshRetryTimer=null}
  try{
    const resp=await fetch(`/data.js?t=${Date.now()}`,{cache:"no-store"});
+   if(resp.status===503){
+     let info={};
+     try{info=await resp.json()}catch(e){}
+     data=[]; snapshot=null; renderAll();
+     const stage=info?.status?.current_stage||"Starting refresh";
+     $("lastUpdated").textContent="Refreshing latest data…";
+     $("footerUpdated").textContent="Refreshing…";
+     $("dataNotice").className="notice refreshing";
+     $("dataNotice").innerHTML=`<strong>Refreshing latest TPN data…</strong>The previous-day snapshot has been blocked, so users will not be shown stale data. Current stage: ${esc(stage)}. This page will retry automatically.`;
+     refreshRetryTimer=setTimeout(loadLatestData,10000);
+     return;
+   }
    if(!resp.ok) throw new Error(`data.js returned HTTP ${resp.status}`);
    const txt=await resp.text();
    window.TPN_SNAPSHOT=undefined;
@@ -348,16 +400,18 @@ async function loadLatestData(){
    const nice=dt && !isNaN(dt)?dt.toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}):upd;
    $("lastUpdated").textContent=nice;
    $("footerUpdated").textContent=nice;
+   hideNotice();
    if(data.length===0){
      showNotice("<strong>No consignments were loaded.</strong>The TPN refresh completed, but the generated data file contains zero rows. Check the export/filter stage before relying on this dashboard.");
    }
    populateFilters();
    renderAll();
  }catch(err){
-   data=[];
+   data=[]; snapshot=null;
    renderAll();
-   $("lastUpdated").textContent="Load failed";
-   showNotice(`<strong>Dashboard data could not be loaded.</strong>${esc(err.message)}. Try “Reload latest data”. If it persists, check /health.`);
+   $("lastUpdated").textContent="Latest data unavailable";
+   $("footerUpdated").textContent="";
+   showNotice(`<strong>Latest TPN data could not be loaded.</strong>${esc(err.message)}. The dashboard will not display a stale snapshot. Try “Reload latest data” or check /health.`);
  }finally{
    $("reloadData").disabled=false;
  }
@@ -379,6 +433,8 @@ $("saveUser").onclick=()=>setUser($("ackUser").value);
 $("ackUser").onkeydown=e=>{if(e.key==="Enter")setUser($("ackUser").value)};
 setUser(currentUser());
 loadLatestData();
+loadAcknowledgements(false);
+ackPollTimer=setInterval(()=>loadAcknowledgements(false),ACK_POLL_MS);
 </script>
 </body>
 </html>
