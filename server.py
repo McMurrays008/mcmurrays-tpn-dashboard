@@ -17,7 +17,7 @@ HERE = Path(__file__).resolve().parent
 STATUS_FILE = HERE / "tpn_run_status.json"
 load_dotenv(HERE/".env")
 
-APP_VERSION = "v19.4-export-then-filter"
+APP_VERSION = "v19.5-no-hanging-diagnostics"
 app = FastAPI(title="TPN Dashboard Automation")
 lock = threading.Lock()
 
@@ -110,8 +110,14 @@ def _start_refresh_background(reason="automatic"):
         try:
             print(f"[refresh] Background refresh requested: {reason}", flush=True)
             do_refresh()
-        except Exception:
-            pass
+        except Exception as exc:
+            # do_refresh records normal collector failures itself. This catches
+            # anything unexpected outside that path without silently hiding it.
+            print(
+                f"[refresh] Background worker exited with "
+                f"{type(exc).__name__}: {exc}",
+                flush=True,
+            )
     threading.Thread(target=worker, daemon=True).start()
     return True
 

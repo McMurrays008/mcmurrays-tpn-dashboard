@@ -335,17 +335,17 @@ def run_collection(stage_callback=None) -> dict:
                     flush=True,
                 )
 
-            try:
-                (HERE/"tpn_failure_html.html").write_text(
-                    page.content(), encoding="utf-8"
-                )
-            except Exception as html_error:
-                print(
-                    f"[diagnostic] Failure HTML capture skipped: "
-                    f"{type(html_error).__name__}: {html_error}",
-                    flush=True,
-                )
-
+            # Do not call page.content() here. If Chromium/page transport is
+            # wedged, Playwright's page.content() has no per-call timeout and can
+            # leave the refresh permanently marked as running.
             raise original_error
         finally:
-            browser.close()
+            try:
+                browser.close()
+            except Exception as close_error:
+                # Browser cleanup must not replace the collection result/error.
+                print(
+                    f"[diagnostic] Browser close warning: "
+                    f"{type(close_error).__name__}: {close_error}",
+                    flush=True,
+                )
