@@ -179,7 +179,7 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 const USER_KEY="tpn_dashboard_current_user";
 // Shared team acknowledgement API is proxied through this Render service to avoid browser cross-origin restrictions.
 const ACK_API="/api/acknowledgements";
-const ACK_POLL_MS=20000;
+const ACK_POLL_MS=5*60*1000;
 let data=[];
 let snapshot=null;
 let cardFilter="";
@@ -495,7 +495,9 @@ $("ackUser").onkeydown=e=>{if(e.key==="Enter")setUser($("ackUser").value)};
 setUser(currentUser());
 loadLatestData();
 loadAcknowledgements(false);
-ackPollTimer=setInterval(()=>loadAcknowledgements(false),ACK_POLL_MS);
+ackPollTimer=setInterval(()=>{if(!document.hidden)loadAcknowledgements(false)},ACK_POLL_MS);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)loadAcknowledgements(false)});
+window.addEventListener("focus",()=>loadAcknowledgements(false));
 </script>
 </body>
 </html>
