@@ -20,6 +20,7 @@ load_dotenv(HERE/".env")
 APP_VERSION = "v19.5-no-hanging-diagnostics"
 app = FastAPI(title="TPN Dashboard Automation")
 lock = threading.Lock()
+TZ = ZoneInfo(os.getenv("TIMEZONE", "Europe/London"))
 
 def _default_status():
     return {
