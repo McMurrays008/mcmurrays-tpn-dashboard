@@ -309,7 +309,7 @@ $("refreshStatuses").addEventListener("click",async()=>{
    tries++;
    try{
     const sr=await fetch("/dedicated-days/health?ts="+Date.now(),{cache:"no-store"});
-    if(!sr.ok)throw new Error("Could not check refresh status");
+    if(!sr.ok)throw new Error("Could not check refresh status (HTTP "+sr.status+")");
     const state=(await sr.json()).status||{};
     if(state.running){
      msg.textContent="Refreshing Microsoft 365 statuses: "+(state.stage||"working...");
