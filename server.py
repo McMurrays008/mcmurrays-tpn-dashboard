@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, Redirect
 import uvicorn
 
 from collector import run_collection
+from refresh_coordinator import browser_refresh_lock
 
 HERE = Path(__file__).resolve().parent
 STATUS_FILE = HERE / "tpn_run_status.json"
@@ -140,7 +141,9 @@ def do_refresh():
             status["current_stage"] = name
             _save_status()
             print(f"[refresh] Stage: {name}", flush=True)
-        result = run_collection(stage_callback=update_stage)
+        update_stage('Waiting for shared browser refresh slot')
+        with browser_refresh_lock:
+            result = run_collection(stage_callback=update_stage)
         status["last_success"] = datetime.now().astimezone().isoformat(timespec="seconds")
         status["last_error"] = None
         status["current_stage"] = "Completed"
@@ -531,7 +534,7 @@ def start_scheduler():
         return
 
     tz = os.getenv("TIMEZONE","Europe/London")
-    hours = os.getenv("REFRESH_HOURS","8-18").strip()
+    hours = os.getenv("REFRESH_HOURS","7-17").strip()
 
     scheduler = BackgroundScheduler(timezone=tz)
     scheduler.add_job(
