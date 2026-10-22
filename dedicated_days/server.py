@@ -17,6 +17,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 from .collector import full_refresh, status_refresh, manual_morning_import, status_refresh_from_file
 from .onedrive_sync import sync_from_onedrive
+from refresh_coordinator import browser_refresh_lock
 
 HERE = Path(__file__).resolve().parent
 load_dotenv(HERE / ".env")
@@ -79,14 +80,16 @@ def run_job(mode):
             save_status()
             print(f"[server] {mode}: {name}", flush=True)
 
-        if mode == "full":
-            result = full_refresh(cb)
-        elif mode == "status":
-            result = status_refresh(cb)
-        elif mode == "onedrive":
-            result = sync_from_onedrive(cb)
-        else:
-            raise RuntimeError(f"Unknown refresh mode: {mode}")
+        cb("Waiting for shared browser refresh slot")
+        with browser_refresh_lock:
+            if mode == "full":
+                result = full_refresh(cb)
+            elif mode == "status":
+                result = status_refresh(cb)
+            elif mode == "onedrive":
+                result = sync_from_onedrive(cb)
+            else:
+                raise RuntimeError(f"Unknown refresh mode: {mode}")
         status.update(
             last_success=datetime.now(TZ).isoformat(timespec="seconds"),
             last_error=None,
