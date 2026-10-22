@@ -19,6 +19,11 @@ load_dotenv(HERE/".env")
 
 APP_VERSION = "v19.5-no-hanging-diagnostics"
 app = FastAPI(title="TPN Dashboard Automation")
+
+# Separate application state and files for Dedicated Day; Next Day remains at /.
+from dedicated_days.server import app as dedicated_day_app
+app.mount("/dedicated-days", dedicated_day_app)
+
 lock = threading.Lock()
 TZ = ZoneInfo(os.getenv("TIMEZONE", "Europe/London"))
 
