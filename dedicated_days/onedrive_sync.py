@@ -13,7 +13,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from playwright.sync_api import sync_playwright
-from collector import manual_morning_import, status_refresh_from_file
+from .collector import manual_morning_import, status_refresh_from_file
 
 HERE = Path(__file__).resolve().parent
 SYNC_DIR = HERE / "onedrive-sync"
