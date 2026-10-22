@@ -1,0 +1,569 @@
+from __future__ import annotations
+
+import json
+import os
+import threading
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import datetime
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+from apscheduler.schedulers.background import BackgroundScheduler
+from dotenv import load_dotenv
+from fastapi import FastAPI, Header, HTTPException, UploadFile, File, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+
+from .collector import full_refresh, status_refresh, manual_morning_import, status_refresh_from_file
+from .onedrive_sync import sync_from_onedrive
+
+HERE = Path(__file__).resolve().parent
+load_dotenv(HERE / ".env")
+TZ = ZoneInfo(os.getenv("TIMEZONE", "Europe/London"))
+app = FastAPI(title="TPN Dedicated Day Dashboard")
+lock = threading.Lock()
+status = {
+    "running": False,
+    "mode": None,
+    "stage": "Idle",
+    "last_attempt": None,
+    "last_success": None,
+    "last_error": None,
+}
+
+STATUS_FILE = HERE / "refresh-status.json"
+DATA_FILE = HERE / "dedicated-day-data.json"
+
+
+def save_status():
+    """Persist refresh progress so a web-process restart does not erase it."""
+    try:
+        tmp = STATUS_FILE.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(status, indent=2), encoding="utf-8")
+        tmp.replace(STATUS_FILE)
+    except Exception as e:
+        print(f"[server] Could not persist refresh status: {e}", flush=True)
+
+
+def load_status():
+    """Restore the last known refresh state after a process restart."""
+    if not STATUS_FILE.exists():
+        return
+    try:
+        saved = json.loads(STATUS_FILE.read_text(encoding="utf-8"))
+        if isinstance(saved, dict):
+            status.update(saved)
+    except Exception as e:
+        print(f"[server] Could not restore refresh status: {e}", flush=True)
+
+
+load_status()
+
+
+def run_job(mode):
+    if not lock.acquire(blocking=False):
+        return {"ok": False, "message": "Refresh already running"}
+
+    status.update(
+        running=True,
+        mode=mode,
+        stage="Starting",
+        last_attempt=datetime.now(TZ).isoformat(timespec="seconds"),
+    )
+    save_status()
+
+    try:
+        def cb(name):
+            status["stage"] = name
+            save_status()
+            print(f"[server] {mode}: {name}", flush=True)
+
+        if mode == "full":
+            result = full_refresh(cb)
+        elif mode == "status":
+            result = status_refresh(cb)
+        elif mode == "onedrive":
+            result = sync_from_onedrive(cb)
+        else:
+            raise RuntimeError(f"Unknown refresh mode: {mode}")
+        status.update(
+            last_success=datetime.now(TZ).isoformat(timespec="seconds"),
+            last_error=None,
+            stage="Completed",
+        )
+        save_status()
+        return {"ok": True, "mode": mode, "result": result}
+    except Exception as e:
+        status.update(last_error=f"{type(e).__name__}: {e}", stage="Failed")
+        save_status()
+        print("[server] ERROR", status["last_error"], flush=True)
+        raise
+    finally:
+        status["running"] = False
+        save_status()
+        lock.release()
+
+
+def start_background(mode):
+    if status["running"]:
+        return False
+
+    def worker():
+        try:
+            run_job(mode)
+        except Exception:
+            pass
+
+    threading.Thread(target=worker, daemon=True).start()
+    return True
+
+
+
+# Shared team acknowledgements are stored directly in the same Upstash Redis database.
+UPSTASH_URL = os.getenv("UPSTASH_REDIS_REST_URL", "").strip().rstrip("/")
+UPSTASH_TOKEN = os.getenv("UPSTASH_REDIS_REST_TOKEN", "").strip()
+ACK_HASH_KEY = "tpn:team:acknowledgements"
+ACK_AUDIT_KEY = "tpn:team:acknowledgement:audit"
+
+def _ack_json(payload, status_code=200):
+    return JSONResponse(
+        payload,
+        status_code=status_code,
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
+
+def _clean_text(value, max_len):
+    return str(value or "").strip()[:max_len]
+
+def _safe_docket(value):
+    docket = _clean_text(value, 80)
+    if not docket:
+        return None
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/-")
+    return docket if all(ch in allowed for ch in docket) else None
+
+def _upstash(command):
+    if not UPSTASH_URL or not UPSTASH_TOKEN:
+        raise RuntimeError("Upstash Redis is not configured in Render")
+    req = urllib.request.Request(
+        UPSTASH_URL,
+        data=json.dumps(command).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {UPSTASH_TOKEN}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "mcmurrays-dedicated-day/1.0",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            raw = resp.read()
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:300]
+        raise RuntimeError(f"Upstash HTTP {exc.code}: {detail}") from exc
+    except Exception as exc:
+        raise RuntimeError(f"Upstash unavailable: {type(exc).__name__}") from exc
+
+    try:
+        payload = json.loads(raw.decode("utf-8")) if raw else {}
+    except Exception as exc:
+        raise RuntimeError("Invalid response from Upstash Redis") from exc
+    if isinstance(payload, dict) and payload.get("error"):
+        raise RuntimeError(str(payload["error"]))
+    return payload.get("result") if isinstance(payload, dict) else None
+
+@app.get("/api/acknowledgements")
+def acknowledgement_list(docket: str | None = None, t: str | None = None):
+    try:
+        if docket:
+            safe = _safe_docket(docket)
+            if not safe:
+                return _ack_json({"ok": False, "error": "Invalid docket."}, 400)
+            raw = _upstash(["HGET", ACK_HASH_KEY, safe])
+            record = json.loads(raw) if raw else None
+            return _ack_json({"ok": True, "acknowledgement": record})
+
+        raw = _upstash(["HGETALL", ACK_HASH_KEY]) or []
+        acknowledgements = {}
+        if isinstance(raw, list):
+            for i in range(0, len(raw), 2):
+                if i + 1 >= len(raw):
+                    break
+                try:
+                    acknowledgements[str(raw[i])] = json.loads(raw[i + 1])
+                except Exception:
+                    continue
+        return _ack_json({
+            "ok": True,
+            "acknowledgements": acknowledgements,
+            "generated_at": datetime.now(TZ).isoformat(timespec="seconds"),
+            "backend": "upstash",
+        })
+    except Exception as exc:
+        print(f"[ack] GET failed: {type(exc).__name__}: {exc}", flush=True)
+        return _ack_json({"ok": False, "error": f"Could not load acknowledgements: {exc}"}, 502)
+
+@app.post("/api/acknowledgements")
+async def acknowledgement_save(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return _ack_json({"ok": False, "error": "Invalid JSON body."}, 400)
+    if not isinstance(body, dict):
+        return _ack_json({"ok": False, "error": "Invalid JSON body."}, 400)
+
+    docket = _safe_docket(body.get("docket"))
+    action = _clean_text(body.get("action"), 20).lower()
+    user = _clean_text(body.get("user"), 80)
+    note = _clean_text(body.get("note"), 500)
+
+    if not docket:
+        return _ack_json({"ok": False, "error": "A valid docket is required."}, 400)
+    if action not in {"acknowledge", "unacknowledge"}:
+        return _ack_json({"ok": False, "error": "Action must be acknowledge or unacknowledge."}, 400)
+    if not user:
+        return _ack_json({"ok": False, "error": "User name is required."}, 400)
+
+    now = datetime.now(TZ).isoformat(timespec="seconds")
+    record = {
+        "docket": docket,
+        "acknowledged": action == "acknowledge",
+        "user": user,
+        "time": now,
+        "note": note,
+    }
+
+    try:
+        encoded = json.dumps(record, ensure_ascii=False, separators=(",", ":"))
+        _upstash(["HSET", ACK_HASH_KEY, docket, encoded])
+        audit = json.dumps({**record, "action": action}, ensure_ascii=False, separators=(",", ":"))
+        _upstash(["LPUSH", ACK_AUDIT_KEY, audit])
+        _upstash(["LTRIM", ACK_AUDIT_KEY, "0", "1999"])
+        return _ack_json({"ok": True, "acknowledgement": record, "backend": "upstash"})
+    except Exception as exc:
+        print(f"[ack] POST failed: {type(exc).__name__}: {exc}", flush=True)
+        return _ack_json({"ok": False, "error": f"Could not save acknowledgement: {exc}"}, 502)
+
+
+@app.get("/")
+def home():
+    return FileResponse(HERE / "dashboard.html", media_type="text/html")
+
+
+@app.get("/dashboard.html")
+def dashboard():
+    return FileResponse(HERE / "dashboard.html", media_type="text/html")
+
+
+@app.get("/dedicated-day-data.json")
+def data():
+    return FileResponse(
+        HERE / "dedicated-day-data.json",
+        media_type="application/json",
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
+
+
+@app.get("/health")
+def health():
+    return JSONResponse(
+        {
+            "service": "tpn-dedicated-day",
+            "status": status,
+            "refresh_token_configured": bool(os.getenv("REFRESH_TOKEN")),
+            "onedrive_sync_enabled": os.getenv("ONEDRIVE_SYNC_ENABLED","false").lower()=="true",
+            "onedrive_configured": all(bool(os.getenv(k)) for k in ("ONEDRIVE_MORNING_URL","ONEDRIVE_STATUS_URL")),
+        }
+    )
+
+
+@app.post("/refresh/{mode}")
+def refresh(mode: str, x_refresh_token: str | None = Header(default=None)):
+    expected = os.getenv("REFRESH_TOKEN")
+    if not expected:
+        raise HTTPException(503, "REFRESH_TOKEN is not configured in Render")
+    if x_refresh_token != expected:
+        raise HTTPException(401, "Invalid refresh token")
+    if mode not in {"full", "status", "onedrive"}:
+        raise HTTPException(400, "Mode must be full, status or onedrive")
+    if not start_background(mode):
+        return JSONResponse(
+            {"ok": False, "message": "Refresh already running"}, status_code=409
+        )
+    return {"ok": True, "message": f"{mode} refresh started"}
+
+
+
+@app.post("/morning-import")
+async def morning_import(file: UploadFile = File(...), x_refresh_token: str | None = Header(default=None)):
+    expected=os.getenv("REFRESH_TOKEN")
+    if not expected:
+        raise HTTPException(503,"REFRESH_TOKEN is not configured in Render")
+    if x_refresh_token != expected:
+        raise HTTPException(401,"Invalid refresh token")
+    if not file.filename.lower().endswith(".xlsx"):
+        raise HTTPException(400,"Please upload the TPN Dedicated Day Check .xlsx file")
+    target=HERE/"morning-dedicated-day-check.xlsx"
+    target.write_bytes(await file.read())
+    try:
+        result=manual_morning_import(target)
+        status.update(last_success=datetime.now(TZ).isoformat(timespec="seconds"),last_error=None,stage="Morning import completed")
+        save_status()
+        return {"ok":True,"result":result}
+    except Exception as e:
+        status.update(last_error=f"{type(e).__name__}: {e}",stage="Morning import failed")
+        save_status()
+        raise HTTPException(500,str(e))
+
+
+@app.post("/power-automate/morning")
+async def power_automate_morning(
+    request: Request,
+    x_refresh_token: str | None = Header(default=None),
+    x_file_name: str | None = Header(default=None),
+):
+    """Accept the morning workbook directly from a Power Automate HTTP action."""
+    expected=os.getenv("REFRESH_TOKEN")
+    if not expected:
+        raise HTTPException(503,"REFRESH_TOKEN is not configured in Render")
+    if x_refresh_token != expected:
+        raise HTTPException(401,"Invalid refresh token")
+    name=(x_file_name or "TPN Dedicated Day Check.xlsx").strip()
+    if not name.lower().endswith(".xlsx"):
+        raise HTTPException(400,"Morning file must be .xlsx")
+    target=HERE/"power-automate-morning.xlsx"
+    body=await request.body()
+    if not body:
+        raise HTTPException(400,"Morning request body was empty")
+    target.write_bytes(body)
+    try:
+        result=manual_morning_import(target)
+        status.update(
+            last_success=datetime.now(TZ).isoformat(timespec="seconds"),
+            last_error=None,
+            stage="Power Automate morning import completed",
+        )
+        save_status()
+        return {"ok":True,"result":result}
+    except Exception as e:
+        status.update(last_error=f"{type(e).__name__}: {e}",stage="Power Automate morning import failed")
+        save_status()
+        raise HTTPException(500,str(e))
+
+
+@app.post("/power-automate/status")
+async def power_automate_status(
+    request: Request,
+    x_refresh_token: str | None = Header(default=None),
+    x_file_name: str | None = Header(default=None),
+):
+    """Accept the latest Browse Export directly from Power Automate."""
+    expected=os.getenv("REFRESH_TOKEN")
+    if not expected:
+        raise HTTPException(503,"REFRESH_TOKEN is not configured in Render")
+    if x_refresh_token != expected:
+        raise HTTPException(401,"Invalid refresh token")
+    name=(x_file_name or "Browse Export.csv").strip()
+    suffix=Path(name).suffix.lower()
+    if suffix not in {".csv",".xlsx"}:
+        raise HTTPException(400,"Status file must be .csv or .xlsx")
+    target=HERE/("power-automate-status"+suffix)
+    body=await request.body()
+    if not body:
+        raise HTTPException(400,"Status request body was empty")
+    target.write_bytes(body)
+    try:
+        result=status_refresh_from_file(target)
+        status.update(
+            last_success=datetime.now(TZ).isoformat(timespec="seconds"),
+            last_error=None,
+            stage="Power Automate status import completed",
+        )
+        save_status()
+        return {"ok":True,"result":result}
+    except Exception as e:
+        status.update(last_error=f"{type(e).__name__}: {e}",stage="Power Automate status import failed")
+        save_status()
+        raise HTTPException(500,str(e))
+
+
+@app.get("/admin")
+def admin():
+    configured = "true" if os.getenv("REFRESH_TOKEN") else "false"
+    return HTMLResponse(
+        f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TPN Dedicated Day Admin</title>
+<style>
+body{{font-family:Segoe UI,Arial,sans-serif;background:#f5f8fc;color:#172033;margin:0}}
+.wrap{{max-width:920px;margin:36px auto;padding:0 18px}}
+.card{{background:#fff;border:1px solid #dbe5f0;border-radius:12px;padding:22px;box-shadow:0 4px 18px rgba(20,50,90,.06);margin-bottom:18px}}
+h1{{margin:0 0 8px;font-size:28px}} h2{{margin-top:0;font-size:19px}}
+.muted{{color:#65758b}} .row{{display:flex;gap:12px;flex-wrap:wrap;align-items:end}}
+.field{{flex:1;min-width:260px}} label{{display:block;font-weight:600;margin-bottom:6px}}
+input{{width:100%;box-sizing:border-box;padding:11px;border:1px solid #bfcddd;border-radius:8px;font-size:15px}}
+button{{border:0;border-radius:8px;padding:11px 16px;font-weight:700;cursor:pointer;background:#1769e0;color:#fff}}
+button.secondary{{background:#42566f}} button:disabled{{opacity:.5;cursor:not-allowed}}
+#result{{white-space:pre-wrap;background:#f4f7fb;padding:14px;border-radius:8px;min-height:24px}}
+pre{{background:#f4f7fb;padding:16px;border-radius:8px;overflow:auto}}
+.ok{{color:#12733c;font-weight:700}} .bad{{color:#b42318;font-weight:700}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>TPN Dedicated Day — Admin</h1>
+    <p class="muted">Run a manual refresh without Render Shell access.</p>
+    <p id="tokenState"></p>
+    <div class="row">
+      <div class="field">
+        <label for="token">Refresh token</label>
+        <input id="token" type="password" autocomplete="off" placeholder="Paste your REFRESH_TOKEN from Render">
+      </div>
+      <div class="field">
+        <label for="morningFile">Morning TPN Dedicated Day Check (.xlsx)</label>
+        <input id="morningFile" type="file" accept=".xlsx">
+      </div>
+      <button onclick="uploadMorning()">Import Morning Check</button>
+      <button class="secondary" onclick="runRefresh('status')">Update Status Now</button>
+      <button class="secondary" onclick="runRefresh('onedrive')">Sync OneDrive Now</button>
+    </div>
+    <p class="muted">Import the morning Dedicated Day Check once. That fixes the day's delivery population. Status refreshes only update those Dockets; they do not add or remove deliveries.</p>
+    <div id="result">Ready.</div>
+  </div>
+
+  <div class="card">
+    <h2>Current refresh status</h2>
+    <pre id="statusBox">Loading…</pre>
+  </div>
+
+  <div class="card">
+    <h2>Schedule</h2>
+    <p>Cloud mode: <strong>Manual Microsoft 365 refresh only</strong>.</p>
+    <p>Each cloud run re-reads the Dedicated Day Check and latest Browse Export / ConsignmentExport from the Dedicated Days OneDrive folder, when you select Sync OneDrive Now or Refresh Statuses.</p>
+    <p>Status matching only updates Dockets from today's fixed morning population. Dashboard checks its JSON every 5 minutes.</p>
+  </div>
+</div>
+<script>
+const tokenConfigured = {str(configured).lower()};
+const tokenState = document.getElementById('tokenState');
+tokenState.innerHTML = tokenConfigured
+  ? '<span class="ok">REFRESH_TOKEN is configured in Render.</span>'
+  : '<span class="bad">REFRESH_TOKEN is NOT configured in Render. Add it under Environment before using the buttons.</span>';
+
+async function uploadMorning() {{
+  const result = document.getElementById('result');
+  const token = document.getElementById('token').value.trim();
+  const file = document.getElementById('morningFile').files[0];
+  if (!token) {{ result.textContent='Paste the REFRESH_TOKEN first.'; return; }}
+  if (!file) {{ result.textContent='Choose the morning TPN Dedicated Day Check .xlsx file first.'; return; }}
+  const form=new FormData();
+  form.append('file',file);
+  result.textContent='Importing morning Dedicated Day Check…';
+  try {{
+    const r=await fetch('/morning-import',{{method:'POST',headers:{{'X-Refresh-Token':token}},body:form}});
+    result.textContent='HTTP '+r.status+'\\n'+await r.text();
+    await loadStatus();
+  }} catch(e) {{
+    result.textContent='Import failed: '+e;
+  }}
+}}
+
+async function runRefresh(mode) {{
+  const result = document.getElementById('result');
+  const token = document.getElementById('token').value.trim();
+  if (!tokenConfigured) {{ result.textContent = 'REFRESH_TOKEN is not configured in Render.'; return; }}
+  if (!token) {{ result.textContent = 'Paste the REFRESH_TOKEN first.'; return; }}
+  result.textContent = 'Starting ' + mode + ' refresh…';
+  try {{
+    const r = await fetch('/refresh/' + mode, {{
+      method: 'POST',
+      headers: {{'X-Refresh-Token': token}}
+    }});
+    const text = await r.text();
+    result.textContent = 'HTTP ' + r.status + '\\n' + text;
+    await loadStatus();
+  }} catch (e) {{
+    result.textContent = 'Request failed: ' + e;
+  }}
+}}
+
+async function loadStatus() {{
+  try {{
+    const r = await fetch('/health?ts=' + Date.now(), {{cache:'no-store'}});
+    const j = await r.json();
+    document.getElementById('statusBox').textContent = JSON.stringify(j, null, 2);
+  }} catch (e) {{
+    document.getElementById('statusBox').textContent = 'Could not load status: ' + e;
+  }}
+}}
+loadStatus();
+setInterval(loadStatus, 5000);
+</script>
+</body>
+</html>"""
+    )
+
+
+scheduler = BackgroundScheduler(timezone=TZ)
+
+def scheduled_onedrive_sync():
+    if os.getenv("ONEDRIVE_SYNC_ENABLED","false").lower()=="true":
+        start_background("onedrive")
+
+# OneDrive status checks are manual only. Use POST /refresh/onedrive.
+# No scheduled polling is registered; this avoids unnecessary background work.
+
+@app.on_event("startup")
+def startup_refresh():
+    """Restore refresh state and make sure the live dashboard is for today.
+
+    Render instances can restart and restore the repository copy of
+    dedicated-day-data.json. When OneDrive cloud sync is enabled, automatically
+    refresh from OneDrive on startup whenever the stored population is stale.
+    """
+    load_status()
+
+    was_interrupted = bool(status.get("running")) and status.get("mode") == "status"
+    status["running"] = False
+    today = datetime.now(TZ).date().isoformat()
+
+    if was_interrupted:
+        status["stage"] = "Recovering interrupted status refresh"
+        status["last_error"] = "Previous web process restarted during status refresh; retrying automatically."
+        save_status()
+
+        if DATA_FILE.exists():
+            try:
+                payload = json.loads(DATA_FILE.read_text(encoding="utf-8"))
+                delivery_date = payload.get("delivery_date")
+                if delivery_date == today and payload.get("rows"):
+                    print("[server] Recovering interrupted Browse status refresh after restart", flush=True)
+                    threading.Timer(8.0, lambda: start_background("status")).start()
+                    return
+            except Exception as e:
+                print(f"[server] Could not validate dashboard data for recovery: {e}", flush=True)
+
+    if os.getenv("ONEDRIVE_AUTO_START","false").lower()=="true":
+        needs_sync=True
+        if DATA_FILE.exists():
+            try:
+                payload=json.loads(DATA_FILE.read_text(encoding="utf-8"))
+                needs_sync=payload.get("delivery_date") != today or not payload.get("rows")
+            except Exception:
+                needs_sync=True
+        if needs_sync:
+            status["stage"]="Refreshing today's OneDrive data after startup"
+            status["last_error"]=None
+            save_status()
+            print("[server] Stored dashboard data is stale; starting OneDrive sync after startup",flush=True)
+            threading.Timer(5.0,lambda:start_background("onedrive")).start()
+            return
+
+    status["stage"]="Idle"
+    save_status()
