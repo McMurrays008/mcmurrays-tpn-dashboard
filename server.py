@@ -23,7 +23,9 @@ app = FastAPI(title="TPN Dashboard Automation")
 
 # Separate application state and files for Dedicated Day; Next Day remains at /.
 from dedicated_days.server import app as dedicated_day_app
+from scan_status.server import app as scan_status_app, start_scheduler as start_scan_status_scheduler
 app.mount("/dedicated-days", dedicated_day_app)
+app.mount("/scan-status", scan_status_app)
 
 lock = threading.Lock()
 TZ = ZoneInfo(os.getenv("TIMEZONE", "Europe/London"))
@@ -553,6 +555,7 @@ def start_scheduler():
 @app.on_event("startup")
 def startup_tasks():
     start_scheduler()
+    start_scan_status_scheduler()
     if not _snapshot_is_fresh():
         _start_refresh_background("service startup found stale or missing snapshot")
 
