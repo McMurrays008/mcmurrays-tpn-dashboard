@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, Redirect
 import uvicorn
 
 from collector import run_collection
+from refresh_coordinator import browser_refresh_lock
 
 HERE = Path(__file__).resolve().parent
 STATUS_FILE = HERE / "tpn_run_status.json"
@@ -19,6 +20,12 @@ load_dotenv(HERE/".env")
 
 APP_VERSION = "v19.5-no-hanging-diagnostics"
 app = FastAPI(title="TPN Dashboard Automation")
+
+# Next Day stays at /; Scan Status is mounted at /scan-status.
+# Dedicated Day remains a separate manual-upload dashboard, not mounted here.
+from scan_status.server import app as scan_status_app, start_scheduler as start_scan_status_scheduler
+app.mount("/scan-status", scan_status_app)
+
 lock = threading.Lock()
 TZ = ZoneInfo(os.getenv("TIMEZONE", "Europe/London"))
 
@@ -135,7 +142,9 @@ def do_refresh():
             status["current_stage"] = name
             _save_status()
             print(f"[refresh] Stage: {name}", flush=True)
-        result = run_collection(stage_callback=update_stage)
+        update_stage('Waiting for shared browser refresh slot')
+        with browser_refresh_lock:
+            result = run_collection(stage_callback=update_stage)
         status["last_success"] = datetime.now().astimezone().isoformat(timespec="seconds")
         status["last_error"] = None
         status["current_stage"] = "Completed"
@@ -526,7 +535,7 @@ def start_scheduler():
         return
 
     tz = os.getenv("TIMEZONE","Europe/London")
-    hours = os.getenv("REFRESH_HOURS","8-18").strip()
+    hours = os.getenv("REFRESH_HOURS","7-17").strip()
 
     scheduler = BackgroundScheduler(timezone=tz)
     scheduler.add_job(
@@ -545,6 +554,7 @@ def start_scheduler():
 @app.on_event("startup")
 def startup_tasks():
     start_scheduler()
+    start_scan_status_scheduler()
     if not _snapshot_is_fresh():
         _start_refresh_background("service startup found stale or missing snapshot")
 
