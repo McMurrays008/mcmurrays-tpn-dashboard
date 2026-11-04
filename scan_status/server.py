@@ -88,7 +88,7 @@ def start_scheduler():
   if scheduler is not None: return
   if os.getenv("ENABLE_SCAN_STATUS_SCHEDULER","true").lower() != "true": return
   scheduler=BackgroundScheduler(timezone=TZ)
-  scheduler.add_job(refresh_job,"cron",day_of_week="mon-fri",minute=15,hour="7-17",id="scan_status_refresh",max_instances=1,coalesce=True)
+  scheduler.add_job(refresh_job,"cron",day_of_week="mon-fri",minute=30,hour="7-17",id="scan_status_refresh",max_instances=1,coalesce=True)
   scheduler.start()
 
 scheduler = None
