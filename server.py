@@ -21,10 +21,9 @@ load_dotenv(HERE/".env")
 APP_VERSION = "v19.5-no-hanging-diagnostics"
 app = FastAPI(title="TPN Dashboard Automation")
 
-# Separate application state and files for Dedicated Day; Next Day remains at /.
-from dedicated_days.server import app as dedicated_day_app
+# Next Day stays at /; Scan Status is mounted at /scan-status.
+# Dedicated Day remains a separate manual-upload dashboard, not mounted here.
 from scan_status.server import app as scan_status_app, start_scheduler as start_scan_status_scheduler
-app.mount("/dedicated-days", dedicated_day_app)
 app.mount("/scan-status", scan_status_app)
 
 lock = threading.Lock()
