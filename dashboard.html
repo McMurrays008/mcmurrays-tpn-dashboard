@@ -27,7 +27,7 @@ button{font:inherit;border:0;border-radius:8px;padding:9px 13px;cursor:pointer}.
 .panel{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 2px 10px rgba(31,73,125,.05);padding:14px;margin-top:14px}.panel h2{margin:0 0 11px;font-size:17px;color:#08285a}.panelhead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .gridpanel{padding:0;overflow:hidden}.gridhead{padding:15px 16px 0;display:flex;justify-content:space-between;gap:12px;align-items:center}.gridhead h2{font-size:18px;margin:0}.toolbar{display:grid;grid-template-columns:minmax(330px,1.6fr) 150px minmax(210px,1fr) 145px 145px minmax(200px,1fr);gap:10px;padding:12px 16px 8px;margin:0}.toolbar input,.toolbar select{width:100%;height:42px;background:#fff;border:1px solid #cfdceb;border-radius:8px;padding:0 11px;color:#132e55;outline:none}.toolbar input:focus,.toolbar select:focus{border-color:#79b2e7;box-shadow:0 0 0 2px rgba(8,119,216,.08)}
 .toolbar2{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:0 16px 11px}.toolbar2 select{height:39px;min-width:220px;background:#fff;border:1px solid #cfdceb;border-radius:8px;padding:0 11px}.meta{color:#63728a;font-size:11px;margin:0;padding:0 16px 10px}.tablewrap{overflow:auto;border-top:1px solid var(--line);background:#fff;max-height:570px}
-table.data{width:100%;border-collapse:collapse;min-width:1120px;font-size:12px}table.data th{position:sticky;top:0;background:#edf3f7;color:#0e2a54;text-align:left;padding:11px 11px;border-bottom:1px solid #cfdeeb;z-index:1;font-weight:800}table.data td{padding:10px 11px;border-bottom:1px solid var(--line2);white-space:nowrap;color:#18365f}table.data tbody tr:nth-child(even){background:#fbfcfe}table.data tbody tr:hover{background:#f2f7fc}table.data tr:last-child td{border-bottom:0}table.data td:first-child strong{color:#092c65}
+table.data{width:100%;border-collapse:collapse;min-width:1120px;font-size:12px}table.data th{position:sticky;top:0;background:#edf3f7;color:#0e2a54;text-align:left;padding:11px 11px;border-bottom:1px solid #cfdeeb;z-index:1;font-weight:800}table.data th .sort-heading{display:inline-flex;align-items:center;gap:6px;border:0;padding:0;background:transparent;color:inherit;font:inherit;font-weight:inherit;text-align:left;cursor:pointer;white-space:nowrap}table.data th .sort-heading:hover{text-decoration:underline}table.data th .sort-heading:focus-visible{outline:2px solid var(--blue);outline-offset:4px;border-radius:2px}table.data th .sort-arrow{font-size:13px;opacity:.58}table.data th[aria-sort="ascending"] .sort-arrow,table.data th[aria-sort="descending"] .sort-arrow{opacity:1;color:var(--blue)}table.data td{padding:10px 11px;border-bottom:1px solid var(--line2);white-space:nowrap;color:#18365f}table.data tbody tr:nth-child(even){background:#fbfcfe}table.data tbody tr:hover{background:#f2f7fc}table.data tr:last-child td{border-bottom:0}table.data td:first-child strong{color:#092c65}
 .badge{display:inline-block;padding:4px 9px;border-radius:999px;background:#e9f0f6;color:#0c2d5a;font-weight:800}.ackbtn{border:1px solid #ef9c9e;background:#fff;color:#d91f26;padding:6px 10px;font-weight:700;border-radius:7px}.ackbtn:before{content:'⚑ ';}.ackbtn.done{background:#e9f6ed;color:#24703b;border-color:#bfdcc7}.ackbtn.done:before{content:'✓ ';}.acknote{display:block;font-size:10px;color:#68758a;margin-top:4px}
 .summarygrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.mini{width:100%;border-collapse:collapse;font-size:12px}.mini th{background:#edf5fb;color:#0c2b57;text-align:left;padding:9px 11px;border-bottom:1px solid #cfdeeb}.mini td{padding:8px 11px;border-bottom:1px solid #e6edf4;color:#173860}.mini tr:last-child td{border-bottom:0}.mini td.num{text-align:right}.mini .dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:9px;vertical-align:-1px}
 .chartgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.chartpanel{min-height:290px}.chartbody{display:grid;grid-template-columns:280px 1fr;align-items:center;gap:26px;padding:8px 20px 10px}.donut{width:205px;height:205px;border-radius:50%;position:relative;margin:auto;background:conic-gradient(#8d97a5 0 100%);box-shadow:inset 0 0 0 1px rgba(0,0,0,.03)}.donut:after{content:"";position:absolute;inset:44px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px #edf1f5}.donutcenter{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}.donutcenter strong{font-size:27px;color:#092c65}.donutcenter span{font-size:12px;color:#1971c9}.legend{display:flex;flex-direction:column;gap:13px}.legendrow{display:grid;grid-template-columns:14px 1fr 55px;gap:9px;align-items:center;font-size:12px}.legenddot{width:12px;height:12px;border-radius:50%}.legendpct{text-align:right;font-weight:600}.hidden{display:none!important}
@@ -145,7 +145,7 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 </div>
 </div>
 <div id="resultMeta" class="meta"></div>
-<div class="tablewrap"><table class="data"><thead><tr><th>Docket</th><th>Sender</th><th>Service</th><th>Status</th><th>Pallets</th><th>Consignee</th><th>Postcode</th><th>Delivery Depot</th><th>Customer Advised</th></tr></thead><tbody id="gridBody"></tbody></table></div>
+<div class="tablewrap"><table class="data"><thead><tr><th scope="col" aria-sort="none"><button type="button" class="sort-heading" data-sort="Docket" aria-label="Sort Docket: ascending, descending, default">Docket<span class="sort-arrow" aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="sort-heading" data-sort="Sender" aria-label="Sort Sender: ascending, descending, default">Sender<span class="sort-arrow" aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="sort-heading" data-sort="Service" aria-label="Sort Service: ascending, descending, default">Service<span class="sort-arrow" aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="sort-heading" data-sort="Status" aria-label="Sort Status: ascending, descending, default">Status<span class="sort-arrow" aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="sort-heading" data-sort="Pallets" aria-label="Sort Pallets: ascending, descending, default">Pallets<span class="sort-arrow" aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="sort-heading" data-sort="Consignee" aria-label="Sort Consignee: ascending, descending, default">Consignee<span class="sort-arrow" aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="sort-heading" data-sort="Postcode" aria-label="Sort Postcode: ascending, descending, default">Postcode<span class="sort-arrow" aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="sort-heading" data-sort="DeliveryDepot" aria-label="Sort Delivery Depot: ascending, descending, default">Delivery Depot<span class="sort-arrow" aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="sort-heading" data-sort="CustomerAdvised" aria-label="Sort Customer Advised: ascending, descending, default">Customer Advised<span class="sort-arrow" aria-hidden="true">↕</span></button></th></tr></thead><tbody id="gridBody"></tbody></table></div>
 </section>
 
 
@@ -183,6 +183,8 @@ const ACK_POLL_MS=5*60*1000;
 let data=[];
 let snapshot=null;
 let cardFilter="";
+let gridSort={column:null,direction:0}; // 0 original, 1 ascending, -1 descending
+const gridColumns=["Docket","Sender","Service","Status","Pallets","Consignee","Postcode","DeliveryDepot","CustomerAdvised"];
 let ackState={};
 let refreshRetryTimer=null;
 let ackPollTimer=null;
@@ -331,6 +333,32 @@ function renderSummaries(){
  makeDonut("consignmentDonut","consignmentLegend","consignmentDonutTotal","c");
  makeDonut("palletDonut","palletLegend","palletDonutTotal","p");
 }
+function sortedGridRows(rows){
+ if(!gridSort.column || !gridSort.direction) return rows;
+ const direction=gridSort.direction, column=gridSort.column;
+ const compare=(a,b)=>{
+   if(column==="CustomerAdvised") return Number(isAck(a.Docket))-Number(isAck(b.Docket));
+   if(column==="Pallets") return (Number(a.Pallets)||0)-(Number(b.Pallets)||0);
+   return String(a[column]??"").localeCompare(String(b[column]??""),"en-GB",{numeric:true,sensitivity:"base"});
+ };
+ return rows.map((item,index)=>({item,index})).sort((a,b)=>direction*compare(a.item,b.item)||a.index-b.index).map(x=>x.item);
+}
+function updateGridSortHeadings(){
+ document.querySelectorAll(".sort-heading").forEach(button=>{
+   const active=button.dataset.sort===gridSort.column && gridSort.direction!==0;
+   const direction=active?(gridSort.direction===1?"ascending":"descending"):"none";
+   button.parentElement.setAttribute("aria-sort",direction);
+   button.querySelector(".sort-arrow").textContent=direction==="ascending"?"▲":direction==="descending"?"▼":"↕";
+   button.title=active?(direction==="ascending"?"Sorted ascending — click for descending":"Sorted descending — click for original order"):"Click to sort ascending";
+ });
+}
+function cycleGridSort(column){
+ if(!gridColumns.includes(column)) return;
+ if(gridSort.column!==column) gridSort={column,direction:1};
+ else if(gridSort.direction===1) gridSort.direction=-1;
+ else gridSort={column:null,direction:0};
+ renderGrid();
+}
 function renderGrid(){
  const q=$("search").value.toLowerCase().trim();
  const st=$("statusFilter").value;
@@ -350,7 +378,8 @@ function renderGrid(){
    (!q||[x.Docket,x.Sender,x.Service,x.Status,x.Consignee,x.Postcode,x.DeliveryDepot].join(" ").toLowerCase().includes(q))
  );
  $("resultMeta").textContent=`${r.length} consignments · ${pallets(r)} pallets`;
- $("gridBody").innerHTML=r.map(row).join("");
+ updateGridSortHeadings();
+ $("gridBody").innerHTML=sortedGridRows(r).map(row).join("");
  wire($("gridBody"));
 }
 function renderAll(){renderCards();renderSummaries();renderGrid()}
@@ -479,6 +508,7 @@ document.querySelectorAll(".card[data-filter]").forEach(c=>c.onclick=()=>{
  populateFilters(true);
  renderAll();
 });
+document.querySelectorAll(".sort-heading").forEach(button=>button.addEventListener("click",()=>cycleGridSort(button.dataset.sort)));
 $("search").addEventListener("input",renderGrid);
 ["statusFilter","customerFilter","serviceFilter","depotFilter","consigneeFilter","ackFilter"].forEach(id=>$(id).addEventListener("change",()=>{
  populateFilters(false);
