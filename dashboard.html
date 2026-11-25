@@ -327,7 +327,7 @@ function rowsForCard(n){
  if(n==="noscans")return data.filter(x=>x.NoScans);
  if(n==="wdd")return data.filter(x=>x.WDD);
  if(n==="delivered")return data.filter(isCoreDelivered);
- if(n==="undelivered")return data.filter(x=>x.Undelivered);
+ if(n==="undelivered")return data.filter(x=>String(x.Status ?? "").trim().toUpperCase()==="OFD");
  return data;
 }
 function title(n){return ({"all":"All Consignments","live":"Total Live consignments","noscans":"Consignments Without Scanning","risk":"Consignments At Risk","wdd":"Consignments WDD","undelivered":"Consignments OFD","delivered":"Consignments DEL"})[n]||""}
@@ -348,16 +348,16 @@ function renderCards(){
  $("allSub").textContent=`${pallets(data)} pallets · ${data.length ? "100.0" : "0.0"}%`;
  $("palletCount").textContent=pallets(live);
  $("opsConsignmentCount").textContent=live.length;
- for(const [n,c,s,l] of [
-   ["risk","riskCount","riskSub","standard risk statuses, excluding CRE"],
-   ["noscans","noscansCount","noscansSub","status CRE"],
-   ["wdd","wddCount","wddSub","WDD in core services"],
-   ["delivered","deliveredCount","deliveredSub","core services, status DEL"],
-   ["undelivered","undeliveredCount","undeliveredSub","core services, status ≠ DEL"]
+ for(const [n,c,s] of [
+   ["risk","riskCount","riskSub"],
+   ["noscans","noscansCount","noscansSub"],
+   ["wdd","wddCount","wddSub"],
+   ["delivered","deliveredCount","deliveredSub"],
+   ["undelivered","undeliveredCount","undeliveredSub"]
  ]){
    const r=rowsForCard(n);
    $(c).textContent=r.length;
-   $(s).textContent=`${pallets(r)} pallets · ${l}`;
+   $(s).textContent=`${pallets(r)} pallets · ${((r.length / (data.length || 1)) * 100).toFixed(1)}%`;
  }
 }
 function renderSummaries(){
