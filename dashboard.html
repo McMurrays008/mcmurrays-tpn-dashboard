@@ -183,6 +183,17 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 <footer><span>Keeping your business moving</span><span>McMurrays Haulage Ltd &nbsp;|&nbsp; Working in partnership with TPN &nbsp;·&nbsp; <span id="footerUpdated"></span></span></footer>
 
 <script>
+function formatHeaderTimestamp(date) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).formatToParts(date);
+  const fields = Object.fromEntries(parts.map(({type, value}) => [type, value]));
+  const day = Number(fields.day);
+  const suffix = day >= 11 && day <= 13 ? 'th' : ({1:'st', 2:'nd', 3:'rd'}[day % 10] || 'th');
+  return `${fields.weekday} ${day}${suffix} ${fields.month}, ${fields.hour}:${fields.minute}`;
+}
+
 const USER_KEY="tpn_dashboard_current_user";
 // Shared team acknowledgement API is proxied through this Render service to avoid browser cross-origin restrictions.
 const ACK_API="/api/acknowledgements";
@@ -460,7 +471,7 @@ async function loadLatestData(){
    const upd=snapshot.generated_at||"unknown";
    const dt=upd==="unknown"?null:new Date(upd);
    const nice=dt && !isNaN(dt)?dt.toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}):upd;
-   $("lastUpdated").textContent=nice;
+   $("lastUpdated").textContent=dt && !isNaN(dt) ? formatHeaderTimestamp(dt) : upd;
    $("footerUpdated").textContent=nice;
    hideNotice();
    if(data.length===0){
