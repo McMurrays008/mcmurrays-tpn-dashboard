@@ -165,6 +165,12 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
  .gridpanel table.data tr{break-inside:avoid}
  .gridpanel .ops-sort span{display:none}
 }
+.gridpanel .ops-gridhead{align-items:end;padding:15px 16px 0}
+.gridpanel .ops-gridhead h2{margin:0;font-size:1.2rem}
+.gridpanel .ops-gridhead .meta{margin:3px 0 0;padding:0;text-align:left;font-size:.82rem}
+.gridpanel .ops-grid-controls{padding:12px 16px}
+.gridpanel #search::placeholder{font-style:italic}
+@media print{.gridpanel .ops-gridhead{padding:0 0 10px}}
 </style>
 
 </head>
@@ -213,11 +219,10 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 
 
 <section class="panel gridpanel">
-<div class="gridhead ops-gridhead"><h2 id="gridTitle">All Consignments</h2><button id="printDashboard" type="button" class="ops-print">Print Dashboard</button></div>
-<div id="filterHint" class="filterhint"><strong>Select a headline above</strong> to unlock filters for that relevant set of consignments.</div>
+<div class="gridhead ops-gridhead"><div><h2 id="gridTitle">All Consignments</h2><div id="resultMeta" class="meta"></div></div><button id="printDashboard" type="button" class="ops-print">Print Dashboard</button></div>
 <div id="filterArea" class="filters-locked">
 <div class="ops-grid-controls">
-<input id="search" type="search" placeholder="Search docket, customer, consignee, postcode etc..." aria-label="Search consignments">
+<input id="search" type="search" placeholder="Search docket, customer ref etc..." aria-label="Search consignments">
 <select id="customerFilter" aria-label="All Customers"><option value="">All Customers</option></select>
 <select id="accountFilter" aria-label="All Acc. Codes"><option value="">All Acc. Codes</option></select>
 <select id="serviceFilter" aria-label="All Services"><option value="">All Services</option></select>
@@ -227,7 +232,6 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 <button id="clearFilters" type="button" class="ops-clear">Clear Filters</button>
 </div>
 </div>
-<div id="resultMeta" class="meta"></div>
 <div class="tablewrap"><table class="data"><thead><tr><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="Docket">DOCKET <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="CustomerReference">CUSTOMER REF <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="Sender">CUSTOMER <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="AccountCode">ACC. CODE <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="Consignee">CONSIGNEE <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="Postcode">POSTCODE <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="Service">SERVICE <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="Pallets">PALLETS <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="Status">STATUS <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="DeliveryDepot">DEL DEPOT <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="Informed">CUSTOMER INFORMED? <span aria-hidden="true">↕</span></button></th></tr></thead><tbody id="gridBody"></tbody></table></div>
 </section>
 
@@ -510,10 +514,7 @@ function setFilterLock(){
    .forEach(id=>$(id).disabled=locked);
  $("search").placeholder=locked
    ?"Select a headline first to search relevant consignments"
-   :"Search docket, sender, consignee, postcode, depot…";
- $("filterHint").innerHTML=locked
-   ?"<strong>Select a headline above</strong> to unlock filters for that relevant set of consignments."
-   :`Filters now show only values relevant to <strong>${esc(title(cardFilter))}</strong>.`;
+   :"Search docket, customer ref etc...";
 }
 function filteredForOptions(excludeId){
  let r=cardFilter?rowsForCard(cardFilter):[];
