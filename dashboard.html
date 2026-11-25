@@ -174,24 +174,24 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 </section></div>
 <section class="cards"><button type="button" class="card all" data-filter="all"><span class="cardcopy"><span class="label">All Consignments</span><span class="big" id="allCount">0</span><span class="sub" id="allSub"></span></span></button><button class="card noscans" data-filter="noscans">
   <span class="iconbubble" aria-hidden="true"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="27" fill="#ef8a16"/><path d="M19 24v-6h6M39 18h6v6M45 40v6h-6M25 46h-6v-6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M20 20l24 24" stroke="#fff" stroke-width="5" stroke-linecap="round"/></svg></span>
-  <span class="cardcopy"><span class="label">Consignments Without Scanning</span><span class="big" id="noscansCount">0</span><span class="sub" id="noscansSub"></span></span>
+  <span class="cardcopy"><span class="label">NO SCANS</span><span class="big" id="noscansCount">0</span><span class="sub" id="noscansSub"></span></span>
 </button>
 <button class="card risk" data-filter="risk">
   <span class="iconbubble" aria-hidden="true"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="#e5252a"/><rect x="29" y="14" width="6" height="27" rx="3" fill="#fff"/><circle cx="32" cy="49" r="4" fill="#fff"/></svg></span>
-  <span class="cardcopy"><span class="label">Consignments At Risk</span><span class="big" id="riskCount">0</span><span class="sub" id="riskSub"></span></span>
+  <span class="cardcopy"><span class="label">RISK</span><span class="big" id="riskCount">0</span><span class="sub" id="riskSub"></span></span>
 </button>
 <button class="card wdd" data-filter="wdd">
   <span class="iconbubble" aria-hidden="true"><svg viewBox="0 0 64 64"><path d="M32 6L60 55H4L32 6z" fill="#f5a000"/><rect x="29" y="21" width="6" height="20" rx="3" fill="#fff"/><circle cx="32" cy="48" r="3.5" fill="#fff"/></svg></span>
-  <span class="cardcopy"><span class="label">Consignments WDD</span><span class="big" id="wddCount">0</span><span class="sub" id="wddSub"></span></span>
+  <span class="cardcopy"><span class="label">WDD</span><span class="big" id="wddCount">0</span><span class="sub" id="wddSub"></span></span>
 </button>
 <button class="card undelivered" data-filter="undelivered">
   <span class="iconbubble" aria-hidden="true"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="#5f7288"/><path d="M22 19v17l12 8" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><path d="M40 18h9v9" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/></svg></span>
-  <span class="cardcopy"><span class="label">Consignments OFD</span><span class="big" id="undeliveredCount">0</span><span class="sub" id="undeliveredSub"></span></span>
+  <span class="cardcopy"><span class="label">OFD</span><span class="big" id="undeliveredCount">0</span><span class="sub" id="undeliveredSub"></span></span>
 </button>
 <button class="card delivered" data-filter="delivered">
   <span class="iconbubble" aria-hidden="true"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="#159447"/><path d="M18 33l9 9 19-21" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-  <span class="cardcopy"><span class="label">Consignments DEL</span><span class="big" id="deliveredCount">0</span><span class="sub" id="deliveredSub">Core services delivered</span></span>
-</button><button type="button" class="card other" data-filter="other"><span class="cardcopy"><span class="label">Other Statuses</span><span class="big" id="otherCount">0</span><span class="sub" id="otherSub"></span></span></button></section>
+  <span class="cardcopy"><span class="label">DEL</span><span class="big" id="deliveredCount">0</span><span class="sub" id="deliveredSub">Core services delivered</span></span>
+</button><button type="button" class="card other" data-filter="other"><span class="cardcopy"><span class="label">OTHERS</span><span class="big" id="otherCount">0</span><span class="sub" id="otherSub"></span></span></button></section>
 
 
 <section class="panel gridpanel">
@@ -357,7 +357,7 @@ function rowsForCard(n){
  if(n==="all")return data;
  return data.filter(x=>consignmentCategory(x)===n);
 }
-function title(n){return ({"all":"All Consignments","other":"Other Statuses","live":"Total Live consignments","noscans":"Consignments Without Scanning","risk":"Consignments At Risk","wdd":"Consignments WDD","undelivered":"Consignments OFD","delivered":"Consignments DEL"})[n]||""}
+function title(n){return ({"all":"All Consignments","other":"OTHERS","live":"Total Live consignments","noscans":"NO SCANS","risk":"RISK","wdd":"WDD","undelivered":"OFD","delivered":"DEL"})[n]||""}
 function ackCell(x){
  const d=isAck(x.Docket);
  const busy=ackBusy.has(String(x.Docket));
