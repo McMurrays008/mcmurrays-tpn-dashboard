@@ -84,6 +84,12 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 .operations-header .shared-refresh:disabled{opacity:.7;cursor:wait}
 .operations-header .latest-timestamp{font-size:.75rem;font-weight:800;font-style:italic}
 @media(max-width:1100px){.operations-header .topbar-inner{grid-template-columns:1fr;gap:14px}}
+.staff-picker{width:fit-content;max-width:100%;margin:0 auto 16px 0;padding:10px 14px;box-sizing:border-box;background:#fff}
+.staff-picker .userbox{flex-wrap:wrap}
+.staff-picker label{font-size:16px;font-weight:800;color:#0d2f5d}
+.staff-picker select{font:inherit;font-weight:700;color:#0d2f5d;border:1px solid var(--line);border-radius:7px;background:#fff;padding:6px;max-width:100%}
+#staffColour{width:11px;height:11px;border-radius:3px}
+.staff-picker .userlabel{display:block;font-size:12px;margin-top:4px}
 </style>
 
 </head>
@@ -94,12 +100,11 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 <main class="wrap">
 <div id="dataNotice" class="notice hidden"></div>
 
-<section class="topbar centered-topbar" aria-label="Dashboard controls">
+<section class="topbar staff-picker" aria-label="Dashboard controls">
   
   <div class="userbox">
-    <span class="userlabel">Current user</span>
-    <input id="ackUser" placeholder="Enter your name">
-    <button id="saveUser" class="secondary">Set name</button>
+    <label for="ackUser">Select User</label>
+    <select id="ackUser"><option value="">Choose a staff member</option><option value="Dave Mills" data-colour="#7653a6" style="color:#7653a6">● Dave Mills</option><option value="Emily Pickering" data-colour="#00884b" style="color:#00884b">● Emily Pickering</option><option value="Hannah Cregg" data-colour="#e5bd00" style="color:#e5bd00">● Hannah Cregg</option><option value="Kalum Lea" data-colour="#d01820" style="color:#d01820">● Kalum Lea</option><option value="Nigel Bates" data-colour="#802735" style="color:#802735">● Nigel Bates</option><option value="Sam Ball" data-colour="#0071bc" style="color:#0071bc">● Sam Ball</option></select><span id="staffColour" aria-hidden="true"></span>
   </div>
   <span id="userStatus" class="userlabel"></span>
   <span id="ackSyncStatus" class="userlabel">Team acknowledgements: connecting…</span>
@@ -213,9 +218,14 @@ const pallets=r=>r.reduce((a,x)=>a+(+x.Pallets||0),0);
 function currentUser(){return(localStorage.getItem(USER_KEY)||"").trim()}
 function setUser(n){
  n=(n||"").trim();
+
+ const picker = $("ackUser");
+ const match = [...picker.options].find(option => option.value && (option.value.toLowerCase() === n.toLowerCase() || option.value.split(" ")[0].toLowerCase() === n.toLowerCase()));
+ n = match?.value || "";
+ picker.value = n;
  if(n)localStorage.setItem(USER_KEY,n);else localStorage.removeItem(USER_KEY);
- $("ackUser").value=n;
- $("userStatus").textContent=n?`Acknowledgements stamped as ${n}`:"Enter a name before acknowledging";
+ $("staffColour").style.backgroundColor = match?.dataset.colour || "transparent";
+ $("userStatus").textContent=n?`Acknowledgements stamped as ${n}`:"Select a user before acknowledging";
 }
 function isAck(d){return!!ackState[String(d)]?.acknowledged}
 function ackLabel(d){const a=ackState[String(d)];if(!a?.acknowledged)return"";return`${a.user} · ${new Date(a.time).toLocaleString("en-GB")}${a.note?` · ${a.note}`:""}`}
@@ -242,7 +252,7 @@ async function toggleAck(d){
  const k=String(d);
  if(ackBusy.has(k)) return;
  const u=currentUser();
- if(!u){alert("Please enter your name first.");$("ackUser").focus();return}
+ if(!u){alert("Please select a user first.");$("ackUser").focus();return}
  const currentlyAcked=isAck(k);
  if(currentlyAcked && !confirm(`Unacknowledge docket ${k}?`)) return;
  const action=currentlyAcked?"unacknowledge":"acknowledge";
@@ -508,8 +518,7 @@ $("clearFilters").onclick=()=>{
  renderAll();
 };
 $("reloadData").onclick=loadLatestData;
-$("saveUser").onclick=()=>setUser($("ackUser").value);
-$("ackUser").onkeydown=e=>{if(e.key==="Enter")setUser($("ackUser").value)};
+$("ackUser").onchange = () => setUser($("ackUser").value);
 setUser(currentUser());
 loadLatestData();
 loadAcknowledgements(false);
