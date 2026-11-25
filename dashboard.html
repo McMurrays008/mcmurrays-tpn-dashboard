@@ -89,7 +89,7 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 .staff-picker label{font-size:16px;font-weight:800;color:#0d2f5d}
 .staff-picker select{font:inherit;font-weight:700;color:#0d2f5d;border:1px solid var(--line);border-radius:7px;background:#fff;padding:6px;max-width:100%}
 #staffColour{width:11px;height:11px;border-radius:3px}
-.staff-picker .userlabel{display:block;font-size:12px;margin-top:4px}
+.staff-picker .userlabel:not([hidden]){display:block;font-size:12px;margin-top:4px}
 </style>
 
 </head>
@@ -106,8 +106,8 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
     <label for="ackUser">Select User</label>
     <select id="ackUser"><option value="">Choose a staff member</option><option value="Dave Mills" data-colour="#7653a6" style="color:#7653a6">● Dave Mills</option><option value="Emily Pickering" data-colour="#00884b" style="color:#00884b">● Emily Pickering</option><option value="Hannah Cregg" data-colour="#e5bd00" style="color:#e5bd00">● Hannah Cregg</option><option value="Kalum Lea" data-colour="#d01820" style="color:#d01820">● Kalum Lea</option><option value="Nigel Bates" data-colour="#802735" style="color:#802735">● Nigel Bates</option><option value="Sam Ball" data-colour="#0071bc" style="color:#0071bc">● Sam Ball</option></select><span id="staffColour" aria-hidden="true"></span>
   </div>
-  <span id="userStatus" class="userlabel"></span>
-  <span id="ackSyncStatus" class="userlabel">Team acknowledgements: connecting…</span>
+  <span id="userStatus" class="userlabel" hidden></span>
+  <span id="ackSyncStatus" class="userlabel" hidden>Team acknowledgements: connecting…</span>
 </section>
 
 
