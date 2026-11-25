@@ -126,6 +126,8 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 .cards .undelivered .big{color:#3485cb}
 .cards .delivered .big{color:#159447}
 .cards .other .big{color:#64748b}
+.ops-sort{padding:0;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;white-space:nowrap}
+.ops-sort span{opacity:.65}
 </style>
 
 </head>
@@ -191,7 +193,7 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 </div>
 </div>
 <div id="resultMeta" class="meta"></div>
-<div class="tablewrap"><table class="data"><thead><tr><th>Docket</th><th>Sender</th><th>Service</th><th>Status</th><th>Pallets</th><th>Consignee</th><th>Postcode</th><th>Delivery Depot</th><th>Customer Advised</th></tr></thead><tbody id="gridBody"></tbody></table></div>
+<div class="tablewrap"><table class="data"><thead><tr><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="Docket">DOCKET <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="CustomerReference">CUSTOMER REF <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="Sender">CUSTOMER <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="AccountCode">ACCOUNT CODE <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="Consignee">CONSIGNEE <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="Postcode">POSTCODE <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="Service">SERVICE <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="Pallets">PALLETS <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="Status">STATUS <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="DeliveryDepot">DELIVERING DEPOT <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort="none"><button type="button" class="ops-sort" data-sort="Informed">CUSTOMER INFORMED? <span aria-hidden="true">↕</span></button></th></tr></thead><tbody id="gridBody"></tbody></table></div>
 </section>
 
 
@@ -345,7 +347,7 @@ function ackCell(x){
 const gridStatusColours={CRE:'#d9252a',WCD:'#159447',WCDP:'#ef8a16',ITHP:'#ef8a16',ITH:'#159447',WDD:'#159447',THH:'#159447',ATH:'#315f91',WDDP:'#d9252a'};
 const categoryColours={"noscans":"#d9252a","risk":"#d9252a","wdd":"#ef8a16","undelivered":"#3485cb","delivered":"#159447","other":"#64748b"};
 function gridStatusColour(status){if(Object.hasOwn(categoryColours,cardFilter))return categoryColours[cardFilter];const code=String(status ?? "").trim().toUpperCase();return Object.hasOwn(gridStatusColours,code)?gridStatusColours[code]:"#315f91";}
-function row(x){return`<tr><td><strong>${esc(x.Docket)}</strong></td><td>${esc(x.Sender)}</td><td>${esc(x.Service)}</td><td><span class="badge" style="--pill:${gridStatusColour(x.Status)}">${esc(x.Status)}</span></td><td>${x.Pallets}</td><td>${esc(x.Consignee)}</td><td>${esc(x.Postcode)}</td><td>${esc(x.DeliveryDepot)}</td>${ackCell(x)}</tr>`}
+function row(x){return `<tr><td><strong>${esc(x.Docket)}</strong></td><td>${esc(x.CustomerReference ?? "—")}</td><td>${esc(x.Sender ?? "—")}</td><td>${esc(x.AccountCode ?? "—")}</td><td>${esc(x.Consignee ?? "—")}</td><td>${esc(x.Postcode ?? "—")}</td><td>${esc(x.Service ?? "—")}</td><td>${esc(x.Pallets ?? "—")}</td><td><span class="badge" style="--pill:${gridStatusColour(x.Status)}">${esc(x.Status)}</span></td><td>${esc(x.DeliveryDepot ?? "—")}</td>${ackCell(x)}</tr>`}
 function wire(root){root.querySelectorAll("[data-ack]").forEach(b=>b.onclick=()=>toggleAck(b.dataset.ack))}
 
 function renderCards(){
@@ -409,6 +411,28 @@ function renderSummaries(){
  makeDonut("consignmentDonut","consignmentLegend","consignmentDonutTotal","c");
  makeDonut("palletDonut","palletLegend","palletDonutTotal","p");
 }
+const gridSort={key:"",direction:0};
+const collator=new Intl.Collator("en-GB",{numeric:true,sensitivity:"base"});
+const sortButtons=document.querySelectorAll(".ops-sort");
+for(const button of sortButtons){
+ button.addEventListener("click",()=>{
+   const key=button.dataset.sort;
+   gridSort.direction=gridSort.key===key?(gridSort.direction===1?-1:0):1;
+   gridSort.key=gridSort.direction?key:"";
+   for(const control of sortButtons){
+     const direction=control.dataset.sort===gridSort.key?gridSort.direction:0;
+     control.closest("th").setAttribute("aria-sort",direction===1?"ascending":direction===-1?"descending":"none");
+     control.querySelector("span").textContent=direction===1?"↑":direction===-1?"↓":"↕";
+   }
+   renderGrid();
+ });
+}
+function sortedGridRows(rows){
+ const {key,direction}=gridSort;
+ if(!direction)return rows;
+ const value=row=>key==="Informed"?Number(isAck(row.Docket)):row[key];
+ return [...rows].sort((a,b)=>direction*(key==="Informed"||key==="Pallets"?Number(value(a)??0)-Number(value(b)??0):collator.compare(value(a)??"",value(b)??"")));
+}
 function renderGrid(){
  const q=$("search").value.toLowerCase().trim();
  const st=$("statusFilter").value;
@@ -425,10 +449,10 @@ function renderGrid(){
    (!dp||x.DeliveryDepot===dp)&&
    (!co||x.Consignee===co)&&
    (!af||(af==="ack"?isAck(x.Docket):!isAck(x.Docket)))&&
-   (!q||[x.Docket,x.Sender,x.Service,x.Status,x.Consignee,x.Postcode,x.DeliveryDepot].join(" ").toLowerCase().includes(q))
+   (!q||[x.Docket,x.CustomerReference,x.AccountCode,x.Sender,x.Service,x.Status,x.Consignee,x.Postcode,x.DeliveryDepot].join(" ").toLowerCase().includes(q))
  );
  $("resultMeta").textContent=`${r.length} consignments · ${pallets(r)} pallets`;
- $("gridBody").innerHTML=r.map(row).join("");
+ $("gridBody").innerHTML=sortedGridRows(r).map(row).join("");
  wire($("gridBody"));
 }
 function renderAll(){renderCards();renderSummaries();renderGrid()}
