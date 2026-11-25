@@ -275,7 +275,9 @@ def build(infile,outfile):
         depot=first(r,"Deliver","Delivery Depot","Del")
         if not docket and not sender and not consignee: continue
         data.append({
-            "Docket":docket,"Sender":sender,"Service":service,"Status":status,
+            "Docket":docket,"Sender":sender,
+            "CustomerReference":first(r,"Customer Reference","Customer Ref","Customer Ref.","Cust Ref","Reference"),
+            "AccountCode":first(r,"Account Code","Account","Customer Account","Customer Code"),"Service":service,"Status":status,
             "Pallets":pallets,"Consignee":consignee,"Postcode":postcode,"DeliveryDepot":depot,
             "Live":status!="DEL",
             "Risk":service in MAIN_SERVICES and status in RISK_STATUSES,
