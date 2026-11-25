@@ -118,7 +118,7 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
   .operations-overview{grid-template-columns:minmax(0,1fr) 980px minmax(0,1fr)}
   .operations-overview .staff-picker select{min-width:0}
 }
-.cards{grid-template-columns:repeat(6,minmax(190px,1fr))}
+.cards{grid-template-columns:repeat(7,minmax(190px,1fr))}
 .cards .all .big{color:#0877d8}
 .cards .noscans .big{color:#d9252a}
 .cards .risk .big{color:#d9252a}
@@ -169,7 +169,7 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 <button class="card delivered" data-filter="delivered">
   <span class="iconbubble" aria-hidden="true"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="#159447"/><path d="M18 33l9 9 19-21" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
   <span class="cardcopy"><span class="label">Consignments DEL</span><span class="big" id="deliveredCount">0</span><span class="sub" id="deliveredSub">Core services delivered</span></span>
-</button></section>
+</button><button type="button" class="card other" data-filter="other"><span class="cardcopy"><span class="label">Other Statuses</span><span class="big" id="otherCount">0</span><span class="sub" id="otherSub"></span></span></button></section>
 
 
 <section class="panel gridpanel">
@@ -321,16 +321,21 @@ function isCoreDelivered(x){
  return CORE_SERVICES.has(String(x.Service||"").trim().toUpperCase()) &&
         String(x.Status||"").trim().toUpperCase()==="DEL";
 }
+function consignmentCategory(x){
+ const status=String(x.Status ?? "").trim().toUpperCase();
+ if(status==="OFD")return "undelivered";
+ if(isCoreDelivered(x))return "delivered";
+ if(x.NoScans)return "noscans";
+ if(x.WDD)return "wdd";
+ if(x.Risk)return "risk";
+ return "other";
+}
 function rowsForCard(n){
  if(n==="live")return data.filter(x=>x.Live);
- if(n==="risk")return data.filter(x=>x.Risk);
- if(n==="noscans")return data.filter(x=>x.NoScans);
- if(n==="wdd")return data.filter(x=>x.WDD);
- if(n==="delivered")return data.filter(isCoreDelivered);
- if(n==="undelivered")return data.filter(x=>String(x.Status ?? "").trim().toUpperCase()==="OFD");
- return data;
+ if(n==="all")return data;
+ return data.filter(x=>consignmentCategory(x)===n);
 }
-function title(n){return ({"all":"All Consignments","live":"Total Live consignments","noscans":"Consignments Without Scanning","risk":"Consignments At Risk","wdd":"Consignments WDD","undelivered":"Consignments OFD","delivered":"Consignments DEL"})[n]||""}
+function title(n){return ({"all":"All Consignments","other":"Other Statuses","live":"Total Live consignments","noscans":"Consignments Without Scanning","risk":"Consignments At Risk","wdd":"Consignments WDD","undelivered":"Consignments OFD","delivered":"Consignments DEL"})[n]||""}
 function ackCell(x){
  const d=isAck(x.Docket);
  const busy=ackBusy.has(String(x.Docket));
@@ -346,14 +351,15 @@ function renderCards(){
  const live=rowsForCard("live");
  $("allCount").textContent=data.length;
  $("allSub").textContent=`${pallets(data)} pallets · ${data.length ? "100.0" : "0.0"}%`;
- $("palletCount").textContent=pallets(live);
- $("opsConsignmentCount").textContent=live.length;
+ $("palletCount").textContent=pallets(data);
+ $("opsConsignmentCount").textContent=data.length;
  for(const [n,c,s] of [
    ["risk","riskCount","riskSub"],
    ["noscans","noscansCount","noscansSub"],
    ["wdd","wddCount","wddSub"],
    ["delivered","deliveredCount","deliveredSub"],
-   ["undelivered","undeliveredCount","undeliveredSub"]
+   ["undelivered","undeliveredCount","undeliveredSub"],
+   ["other","otherCount","otherSub"]
  ]){
    const r=rowsForCard(n);
    $(c).textContent=r.length;
