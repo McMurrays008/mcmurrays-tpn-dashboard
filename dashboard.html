@@ -228,7 +228,11 @@ function setUser(n){
  $("userStatus").textContent=n?`Acknowledgements stamped as ${n}`:"Select a user before acknowledging";
 }
 function isAck(d){return!!ackState[String(d)]?.acknowledged}
-function ackLabel(d){const a=ackState[String(d)];if(!a?.acknowledged)return"";return`${a.user} · ${new Date(a.time).toLocaleString("en-GB")}${a.note?` · ${a.note}`:""}`}
+function formatAcknowledgementTime(value){
+ const date=new Date(value);
+ return value && !isNaN(date) ? formatHeaderTimestamp(date) : "";
+}
+function ackLabel(d){const a=ackState[String(d)];if(!a?.acknowledged)return"";return`${a.user} · ${formatAcknowledgementTime(a.time)}${a.note?` · ${a.note}`:""}`}
 function setAckSyncStatus(text,ok=true){
  const el=$("ackSyncStatus");
  el.textContent=text;
