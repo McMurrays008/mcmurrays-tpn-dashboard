@@ -364,7 +364,7 @@ function ackCell(x){
  return `<td><button class="ackbtn ${d?"done":""}" data-ack="${esc(x.Docket)}" ${busy?"disabled":""}>${busy?"Saving…":(d?"✓ Acknowledged — click to undo":"Acknowledge")}</button>${d?`<span class="acknote">${esc(ackLabel(x.Docket))}</span>`:""}</td>`;
 }
 const gridStatusColours={CRE:'#d9252a',WCD:'#159447',WCDP:'#ef8a16',ITHP:'#ef8a16',ITH:'#159447',WDD:'#159447',THH:'#159447',ATH:'#315f91',WDDP:'#d9252a'};
-const categoryColours={"noscans":"#d9252a","risk":"#d9252a","wdd":"#ef8a16","undelivered":"#3485cb","delivered":"#159447","other":"#64748b"};
+const categoryColours={"noscans":"#d9252a","risk":"#d9252a","wdd":"#ef8a16","undelivered":"#3485cb","delivered":"#159447","other":"#64748b","all":"#0877d8"};
 function gridStatusColour(status){if(Object.hasOwn(categoryColours,cardFilter))return categoryColours[cardFilter];const code=String(status ?? "").trim().toUpperCase();return Object.hasOwn(gridStatusColours,code)?gridStatusColours[code]:"#315f91";}
 function row(x){return `<tr><td><strong>${esc(x.Docket)}</strong></td><td>${esc(x.CustomerReference ?? "—")}</td><td>${esc(x.Sender ?? "—")}</td><td>${esc(x.AccountCode ?? "—")}</td><td>${esc(x.Consignee ?? "—")}</td><td>${esc(x.Postcode ?? "—")}</td><td>${esc(x.Service ?? "—")}</td><td>${esc(x.Pallets ?? "—")}</td><td><span class="badge" style="--pill:${gridStatusColour(x.Status)}">${esc(x.Status)}</span></td><td>${esc(x.DeliveryDepot ?? "—")}</td>${ackCell(x)}</tr>`}
 function wire(root){root.querySelectorAll("[data-ack]").forEach(b=>b.onclick=()=>toggleAck(b.dataset.ack))}
