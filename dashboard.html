@@ -132,10 +132,15 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 .tablewrap table.data th,.tablewrap table.data td{min-width:0;padding:7px 5px;white-space:normal;overflow-wrap:anywhere}
 .tablewrap table.data .ops-sort,.tablewrap table.data .ackbtn{max-width:100%;white-space:normal;overflow-wrap:anywhere}
 .tablewrap table.data th:nth-child(1){width:7%}
-.tablewrap table.data th:nth-child(2){width:10%}
-.tablewrap table.data th:nth-child(3){width:13%}
+.tablewrap table.data th:nth-child(2){width:7.25rem}
+.tablewrap table.data th:nth-child(2) .ops-sort{white-space:nowrap}
+@media(max-width:850px){
+  .tablewrap table.data th:nth-child(2){width:10%}
+  .tablewrap table.data th:nth-child(2) .ops-sort{white-space:normal}
+}
+.tablewrap table.data th:nth-child(3){width:auto}
 .tablewrap table.data th:nth-child(4){width:7%}
-.tablewrap table.data th:nth-child(5){width:14%}
+.tablewrap table.data th:nth-child(5){width:auto}
 .tablewrap table.data th:nth-child(6){width:8%}
 .tablewrap table.data th:nth-child(7){width:6%}
 .tablewrap table.data th:nth-child(8){width:5%}
