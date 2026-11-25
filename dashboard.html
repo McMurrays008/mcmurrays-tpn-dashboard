@@ -110,6 +110,14 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 .operations-overview .operations-totals{margin:0;width:100%}
 @media(max-width:1200px){.operations-overview{grid-template-columns:auto minmax(0,1fr)}}
 @media(max-width:700px){.operations-overview{grid-template-columns:1fr}}
+.gridpanel .badge{display:inline-flex;border-radius:999px;padding:4px 10px;font-size:.76rem;font-weight:800;background:var(--pill,#315f91);color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.operations-totals{line-height:1.5}
+.operations-totals div{background:#1a41cd;border-color:#1a41cd}
+.operations-totals span,.operations-totals strong{color:#fff}
+@media(min-width:1201px){
+  .operations-overview{grid-template-columns:minmax(0,1fr) 980px minmax(0,1fr)}
+  .operations-overview .staff-picker select{min-width:0}
+}
 </style>
 
 </head>
@@ -323,7 +331,9 @@ function ackCell(x){
  const busy=ackBusy.has(String(x.Docket));
  return `<td><button class="ackbtn ${d?"done":""}" data-ack="${esc(x.Docket)}" ${busy?"disabled":""}>${busy?"Saving…":(d?"✓ Acknowledged — click to undo":"Acknowledge")}</button>${d?`<span class="acknote">${esc(ackLabel(x.Docket))}</span>`:""}</td>`;
 }
-function row(x){return`<tr><td><strong>${esc(x.Docket)}</strong></td><td>${esc(x.Sender)}</td><td>${esc(x.Service)}</td><td><span class="badge">${esc(x.Status)}</span></td><td>${x.Pallets}</td><td>${esc(x.Consignee)}</td><td>${esc(x.Postcode)}</td><td>${esc(x.DeliveryDepot)}</td>${ackCell(x)}</tr>`}
+const gridStatusColours={CRE:'#d9252a',WCD:'#159447',WCDP:'#ef8a16',ITHP:'#ef8a16',ITH:'#159447',WDD:'#159447',THH:'#159447',ATH:'#315f91',WDDP:'#d9252a'};
+function gridStatusColour(status){const code=String(status ?? "").trim().toUpperCase();return Object.hasOwn(gridStatusColours,code)?gridStatusColours[code]:"#315f91";}
+function row(x){return`<tr><td><strong>${esc(x.Docket)}</strong></td><td>${esc(x.Sender)}</td><td>${esc(x.Service)}</td><td><span class="badge" style="--pill:${gridStatusColour(x.Status)}">${esc(x.Status)}</span></td><td>${x.Pallets}</td><td>${esc(x.Consignee)}</td><td>${esc(x.Postcode)}</td><td>${esc(x.DeliveryDepot)}</td>${ackCell(x)}</tr>`}
 function wire(root){root.querySelectorAll("[data-ack]").forEach(b=>b.onclick=()=>toggleAck(b.dataset.ack))}
 
 function renderCards(){
