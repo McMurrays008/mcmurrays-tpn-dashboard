@@ -105,6 +105,11 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 .cards .card.active::after{opacity:1}
 .cards .sub{white-space:normal}
 @media(max-width:560px){.operations-totals{grid-template-columns:1fr}}
+.operations-overview{position:relative;margin-bottom:20px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,3fr) minmax(0,1fr);align-items:center;gap:18px}
+.operations-overview .staff-picker{margin:0}
+.operations-overview .operations-totals{margin:0;width:100%}
+@media(max-width:1200px){.operations-overview{grid-template-columns:auto minmax(0,1fr)}}
+@media(max-width:700px){.operations-overview{grid-template-columns:1fr}}
 </style>
 
 </head>
@@ -115,7 +120,7 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 <main class="wrap">
 <div id="dataNotice" class="notice hidden"></div>
 
-<section class="topbar staff-picker" aria-label="Dashboard controls">
+<div class="operations-overview"><section class="topbar staff-picker" aria-label="Dashboard controls">
   
   <div class="userbox">
     <label for="ackUser">Select User</label>
@@ -129,7 +134,7 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 <section class="operations-totals" aria-label="Totals">
 <div><span>TOTAL CONSIGNMENTS</span><strong id="opsConsignmentCount">0</strong></div>
 <div><span>TOTAL PALLETS</span><strong id="palletCount">0</strong></div>
-</section>
+</section></div>
 <section class="cards">
 <button class="card risk" data-filter="risk">
   <span class="iconbubble" aria-hidden="true"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="#e5252a"/><rect x="29" y="14" width="6" height="27" rx="3" fill="#fff"/><circle cx="32" cy="49" r="4" fill="#fff"/></svg></span>
