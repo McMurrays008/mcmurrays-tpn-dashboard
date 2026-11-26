@@ -188,9 +188,8 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
  .topbar-inner .dashboard-heading h1{font-size:clamp(12px,6.1cqi,2.6rem);white-space:nowrap}
 }
 @media(max-width:1100px){.topbar-inner .dashboard-heading h1{font-size:clamp(1.25rem,4vw,2.6rem)}}
-@media(min-width:1050px){
- .tablewrap table.data .ackbtn.done{white-space:nowrap;padding:5px 4px;font-size:11px;letter-spacing:-.1px}
-}
+.tablewrap table.data td:last-child{container-type:inline-size}
+.tablewrap table.data .ackbtn.done{display:inline-block;width:max-content;max-width:100%;white-space:nowrap;overflow-wrap:normal;padding:5px 3px;font-size:min(11px,5.8cqi);letter-spacing:-.1px;line-height:1.2}
 </style>
 
 </head>
