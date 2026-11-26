@@ -188,6 +188,9 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
  .topbar-inner .dashboard-heading h1{font-size:clamp(12px,6.1cqi,2.6rem);white-space:nowrap}
 }
 @media(max-width:1100px){.topbar-inner .dashboard-heading h1{font-size:clamp(1.25rem,4vw,2.6rem)}}
+@media(min-width:1050px){
+ .tablewrap table.data .ackbtn.done{white-space:nowrap;padding:5px 4px;font-size:11px;letter-spacing:-.1px}
+}
 </style>
 
 </head>
@@ -398,7 +401,7 @@ function title(n){return ({"all":"All Consignments","other":"OTHERS","live":"Tot
 function ackCell(x){
  const d=isAck(x.Docket);
  const busy=ackBusy.has(String(x.Docket));
- return `<td><button class="ackbtn ${d?"done":""}" data-ack="${esc(x.Docket)}" ${busy?"disabled":""}>${busy?"Saving…":(d?"✓ Acknowledged — click to undo":"Acknowledge")}</button>${d?`<span class="acknote">${esc(ackLabel(x.Docket))}</span>`:""}</td>`;
+ return `<td><button class="ackbtn ${d?"done":""}" data-ack="${esc(x.Docket)}" ${busy?"disabled":""}>${busy?"Saving…":(d?"✓ Acknowledged (click to undo)":"Acknowledge")}</button>${d?`<span class="acknote">${esc(ackLabel(x.Docket))}</span>`:""}</td>`;
 }
 const gridStatusColours={CRE:'#d9252a',WCD:'#159447',WCDP:'#ef8a16',ITHP:'#ef8a16',ITH:'#159447',WDD:'#159447',THH:'#159447',ATH:'#315f91',WDDP:'#d9252a'};
 const categoryColours={"noscans":"#d9252a","risk":"#d9252a","wdd":"#ef8a16","undelivered":"#3485cb","delivered":"#159447","other":"#64748b","all":"#0877d8"};
