@@ -284,11 +284,11 @@ async def acknowledgement_save(request: Request):
 
 @app.get("/")
 def home():
-    return FileResponse(HERE/"dashboard.html", media_type="text/html")
+    return FileResponse(HERE/"dashboard.html", media_type="text/html", headers={"Cache-Control": "no-store"})
 
 @app.get("/dashboard.html")
 def dashboard():
-    return FileResponse(HERE/"dashboard.html", media_type="text/html")
+    return FileResponse(HERE/"dashboard.html", media_type="text/html", headers={"Cache-Control": "no-store"})
 
 @app.get("/data.js")
 def data_js():
