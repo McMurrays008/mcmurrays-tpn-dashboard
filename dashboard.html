@@ -199,6 +199,11 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 #filterArea .ops-multi-options label{display:flex;align-items:center;gap:7px;padding:5px;cursor:pointer}
 #filterArea .ops-multi-options input{width:auto;height:auto;margin:0;flex:none}
 .cards .nd-open .big{color:#d9252a}
+.cards{grid-template-columns:repeat(8,minmax(0,1fr));gap:10px;overflow:visible}
+.cards .card{min-width:0;padding:12px}
+.cards .card::after{right:10px}
+@media(max-width:1050px){.cards{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:520px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 
 </head>
@@ -224,7 +229,7 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 <div><span>TOTAL CONSIGNMENTS</span><strong id="opsConsignmentCount">0</strong></div>
 <div><span>TOTAL PALLETS</span><strong id="palletCount">0</strong></div>
 </section></div>
-<section class="cards"><button type="button" class="card all" data-filter="all"><span class="cardcopy"><span class="label">All Consignments</span><span class="big" id="allCount">0</span><span class="sub" id="allSub"></span></span></button><button class="card noscans" data-filter="noscans">
+<section class="cards"><button type="button" class="card all" data-filter="all"><span class="cardcopy"><span class="label">ALL</span><span class="big" id="allCount">0</span><span class="sub" id="allSub"></span></span></button><button class="card noscans" data-filter="noscans">
   <span class="iconbubble" aria-hidden="true"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="27" fill="#ef8a16"/><path d="M19 24v-6h6M39 18h6v6M45 40v6h-6M25 46h-6v-6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M20 20l24 24" stroke="#fff" stroke-width="5" stroke-linecap="round"/></svg></span>
   <span class="cardcopy"><span class="label">NO SCANS</span><span class="big" id="noscansCount">0</span><span class="sub" id="noscansSub"></span></span>
 </button>
@@ -243,7 +248,7 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 <button class="card delivered" data-filter="delivered">
   <span class="iconbubble" aria-hidden="true"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="#159447"/><path d="M18 33l9 9 19-21" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
   <span class="cardcopy"><span class="label">DEL</span><span class="big" id="deliveredCount">0</span><span class="sub" id="deliveredSub">Core services delivered</span></span>
-</button><button type="button" class="card nd-open" data-filter="nd-open"><span class="cardcopy"><span class="label">UNDELIVERED ND'S</span><span class="big" id="ndOpenCount">0</span><span class="sub" id="ndOpenSub"></span></span></button><button type="button" class="card other" data-filter="other"><span class="cardcopy"><span class="label">OTHERS</span><span class="big" id="otherCount">0</span><span class="sub" id="otherSub"></span></span></button></section>
+</button><button type="button" class="card nd-open" data-filter="nd-open"><span class="cardcopy"><span class="label">UNDEL ND</span><span class="big" id="ndOpenCount">0</span><span class="sub" id="ndOpenSub"></span></span></button><button type="button" class="card other" data-filter="other"><span class="cardcopy"><span class="label">OTHERS</span><span class="big" id="otherCount">0</span><span class="sub" id="otherSub"></span></span></button></section>
 
 
 <section class="panel gridpanel">
@@ -406,7 +411,7 @@ function rowsForCard(n){
  if(n==="nd-open")return data.filter(x=>CORE_SERVICES.has(String(x.Service??"").trim().toUpperCase())&&String(x.Status??"").trim().toUpperCase()!=="DEL");
  return data.filter(x=>consignmentCategory(x)===n);
 }
-function title(n){return ({"all":"All Consignments","other":"OTHERS","nd-open":"UNDELIVERED ND'S","live":"Total Live consignments","noscans":"NO SCANS","risk":"RISK","wdd":"WDD","undelivered":"OFD","delivered":"DEL"})[n]||""}
+function title(n){return ({"all":"All Consignments","other":"OTHERS","nd-open":"UNDEL ND","live":"Total Live consignments","noscans":"NO SCANS","risk":"RISK","wdd":"WDD","undelivered":"OFD","delivered":"DEL"})[n]||""}
 function ackCell(x){
  const d=isAck(x.Docket);
  const busy=ackBusy.has(String(x.Docket));
