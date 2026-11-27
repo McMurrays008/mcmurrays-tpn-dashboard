@@ -118,7 +118,7 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
   .operations-overview{grid-template-columns:minmax(0,1fr) 980px minmax(0,1fr)}
   .operations-overview .staff-picker select{min-width:0}
 }
-.cards{grid-template-columns:repeat(7,minmax(190px,1fr))}
+.cards{grid-template-columns:repeat(8,minmax(190px,1fr))}
 .cards .all .big{color:#0877d8}
 .cards .noscans .big{color:#d9252a}
 .cards .risk .big{color:#d9252a}
@@ -198,6 +198,7 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 .ops-multi-options{position:absolute;z-index:10;top:calc(100% + 4px);left:0;min-width:100%;width:max-content;max-width:min(270px,80vw);max-height:230px;overflow:auto;background:#fff;border:1px solid #cfdceb;border-radius:8px;box-shadow:0 3px 12px #00194138;padding:6px}
 #filterArea .ops-multi-options label{display:flex;align-items:center;gap:7px;padding:5px;cursor:pointer}
 #filterArea .ops-multi-options input{width:auto;height:auto;margin:0;flex:none}
+.cards .nd-open .big{color:#8a4a16}
 </style>
 
 </head>
@@ -242,7 +243,7 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 <button class="card delivered" data-filter="delivered">
   <span class="iconbubble" aria-hidden="true"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="#159447"/><path d="M18 33l9 9 19-21" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
   <span class="cardcopy"><span class="label">DEL</span><span class="big" id="deliveredCount">0</span><span class="sub" id="deliveredSub">Core services delivered</span></span>
-</button><button type="button" class="card other" data-filter="other"><span class="cardcopy"><span class="label">OTHERS</span><span class="big" id="otherCount">0</span><span class="sub" id="otherSub"></span></span></button></section>
+</button><button type="button" class="card nd-open" data-filter="nd-open"><span class="cardcopy"><span class="label">UNDELIVERED ND'S</span><span class="big" id="ndOpenCount">0</span><span class="sub" id="ndOpenSub"></span></span></button><button type="button" class="card other" data-filter="other"><span class="cardcopy"><span class="label">OTHERS</span><span class="big" id="otherCount">0</span><span class="sub" id="otherSub"></span></span></button></section>
 
 
 <section class="panel gridpanel">
@@ -402,16 +403,17 @@ function consignmentCategory(x){
 function rowsForCard(n){
  if(n==="live")return data.filter(x=>x.Live);
  if(n==="all")return data;
+ if(n==="nd-open")return data.filter(x=>CORE_SERVICES.has(String(x.Service??"").trim().toUpperCase())&&String(x.Status??"").trim().toUpperCase()!=="DEL");
  return data.filter(x=>consignmentCategory(x)===n);
 }
-function title(n){return ({"all":"All Consignments","other":"OTHERS","live":"Total Live consignments","noscans":"NO SCANS","risk":"RISK","wdd":"WDD","undelivered":"OFD","delivered":"DEL"})[n]||""}
+function title(n){return ({"all":"All Consignments","other":"OTHERS","nd-open":"UNDELIVERED ND'S","live":"Total Live consignments","noscans":"NO SCANS","risk":"RISK","wdd":"WDD","undelivered":"OFD","delivered":"DEL"})[n]||""}
 function ackCell(x){
  const d=isAck(x.Docket);
  const busy=ackBusy.has(String(x.Docket));
  return `<td><button class="ackbtn ${d?"done":""}" data-ack="${esc(x.Docket)}" ${busy?"disabled":""}>${busy?"Saving…":(d?"✓ Acknowledged (click to undo)":"Acknowledge")}</button>${d?`<span class="acknote">${esc(ackLabel(x.Docket))}</span>`:""}</td>`;
 }
 const gridStatusColours={CRE:'#d9252a',WCD:'#159447',WCDP:'#ef8a16',ITHP:'#ef8a16',ITH:'#159447',WDD:'#159447',THH:'#159447',ATH:'#315f91',WDDP:'#d9252a'};
-const categoryColours={"noscans":"#d9252a","risk":"#d9252a","wdd":"#ef8a16","undelivered":"#3485cb","delivered":"#159447","other":"#64748b","all":"#0877d8"};
+const categoryColours={"noscans":"#d9252a","risk":"#d9252a","wdd":"#ef8a16","undelivered":"#3485cb","delivered":"#159447","other":"#64748b","nd-open":"#8a4a16","all":"#0877d8"};
 function gridStatusColour(status){if(Object.hasOwn(categoryColours,cardFilter))return categoryColours[cardFilter];const code=String(status ?? "").trim().toUpperCase();return Object.hasOwn(gridStatusColours,code)?gridStatusColours[code]:"#315f91";}
 function row(x){return `<tr><td><strong>${esc(x.Docket)}</strong></td><td>${esc(x.CustomerReference ?? "—")}</td><td>${esc(x.Sender ?? "—")}</td><td>${esc(x.AccountCode ?? "—")}</td><td>${esc(x.Consignee ?? "—")}</td><td>${esc(x.Postcode ?? "—")}</td><td>${esc(x.Service ?? "—")}</td><td>${esc(x.Pallets ?? "—")}</td><td><span class="badge" style="--pill:${gridStatusColour(x.Status)}">${esc(x.Status)}</span></td><td>${esc(x.DeliveryDepot ?? "—")}</td>${ackCell(x)}</tr>`}
 function wire(root){root.querySelectorAll("[data-ack]").forEach(b=>b.onclick=()=>toggleAck(b.dataset.ack))}
@@ -428,6 +430,7 @@ function renderCards(){
    ["wdd","wddCount","wddSub"],
    ["delivered","deliveredCount","deliveredSub"],
    ["undelivered","undeliveredCount","undeliveredSub"],
+   ["nd-open","ndOpenCount","ndOpenSub"],
    ["other","otherCount","otherSub"]
  ]){
    const r=rowsForCard(n);
