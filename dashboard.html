@@ -190,6 +190,14 @@ footer{max-width:1540px;margin:0 auto;padding:17px 26px 24px;border-top:1px soli
 @media(max-width:1100px){.topbar-inner .dashboard-heading h1{font-size:clamp(1.25rem,4vw,2.6rem)}}
 .tablewrap table.data td:last-child{container-type:inline-size}
 .tablewrap table.data .ackbtn.done{display:inline-block;width:max-content;max-width:100%;white-space:nowrap;overflow-wrap:normal;padding:5px 3px;font-size:min(11px,5.8cqi);letter-spacing:-.1px;line-height:1.2}
+.ops-multi{min-width:0;position:relative}
+.ops-grid-controls select[hidden]{display:none}
+.ops-multi[hidden]{display:none}
+.ops-multi summary{height:42px;border:1px solid #cfdceb;border-radius:8px;background:#fff;padding:10px 24px 10px 8px;list-style:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;position:relative}
+.ops-multi summary::after{content:"▾";position:absolute;right:9px}
+.ops-multi-options{position:absolute;z-index:10;top:calc(100% + 4px);left:0;min-width:100%;width:max-content;max-width:min(270px,80vw);max-height:230px;overflow:auto;background:#fff;border:1px solid #cfdceb;border-radius:8px;box-shadow:0 3px 12px #00194138;padding:6px}
+#filterArea .ops-multi-options label{display:flex;align-items:center;gap:7px;padding:5px;cursor:pointer}
+#filterArea .ops-multi-options input{width:auto;height:auto;margin:0;flex:none}
 </style>
 
 </head>
@@ -494,20 +502,20 @@ function sortedGridRows(rows){
 function renderGrid(){
  $("gridTitle").textContent=cardFilter && cardFilter!=="all" ? title(cardFilter)+" Consignments" : "All Consignments";
  const q=$("search").value.toLowerCase().trim();
- const st=$("statusFilter").value;
- const cu=$("customerFilter").value;
- const sv=$("serviceFilter").value;
- const dp=$("depotFilter").value;
- const co=$("accountFilter").value;
- const af=$("ackFilter").value;
+ const st=filterSelection("statusFilter");
+ const cu=filterSelection("customerFilter");
+ const sv=filterSelection("serviceFilter");
+ const dp=filterSelection("depotFilter");
+ const co=filterSelection("accountFilter");
+ const af=filterSelection("ackFilter");
  let r=cardFilter?rowsForCard(cardFilter):data;
  r=r.filter(x=>
-   (!st||x.Status===st)&&
-   (!cu||x.Sender===cu)&&
-   (!sv||x.Service===sv)&&
-   (!dp||x.DeliveryDepot===dp)&&
-   (!co||x.AccountCode===co)&&
-   (!af||(af==="ack"?isAck(x.Docket):!isAck(x.Docket)))&&
+   (!st.size||st.has(String(x.Status??"")))&&
+   (!cu.size||cu.has(String(x.Sender??"")))&&
+   (!sv.size||sv.has(String(x.Service??"")))&&
+   (!dp.size||dp.has(String(x.DeliveryDepot??"")))&&
+   (!co.size||co.has(String(x.AccountCode??"")))&&
+   (!af.size||af.has(isAck(x.Docket)?"ack":"unack"))&&
    (!q||[x.Docket,x.CustomerReference,x.AccountCode,x.Sender,x.Service,x.Status,x.Consignee,x.Postcode,x.DeliveryDepot].join(" ").toLowerCase().includes(q))
  );
  $("resultMeta").textContent=`${r.length} consignments · ${pallets(r)} pallets`;
@@ -516,16 +524,61 @@ function renderGrid(){
 }
 function renderAll(){renderCards();renderSummaries();renderGrid()}
 
-function fillSelect(id, values, label, keepValue=true){
- const el=$(id);
- const previous=keepValue?el.value:"";
- const options=[...new Set(values.filter(Boolean))]
-   .sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
- el.innerHTML=`<option value="">${label}</option>`+
-   options.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join("");
- if(previous && options.includes(previous)) el.value=previous;
- else el.value="";
+const opsMultiFilters=new Map();
+for(const id of ["statusFilter","customerFilter","serviceFilter","depotFilter","accountFilter","ackFilter"]){
+ const select=$(id);
+ const menu=document.createElement("details");
+ menu.className="ops-multi";
+ const summary=document.createElement("summary");
+ const panel=document.createElement("div");
+ panel.className="ops-multi-options";
+ menu.append(summary,panel);
+ select.hidden=true;
+ select.after(menu);
+ const state={select,menu,summary,panel,selected:new Set(),label:select.options[0].textContent};
+ opsMultiFilters.set(id,state);
 }
+function filterSelection(id,excludeId){
+ return id===excludeId?new Set():opsMultiFilters.get(id).selected;
+}
+function clearFilterSelection(id){opsMultiFilters.get(id).selected.clear();}
+function drawOpsMulti(id,options){
+ const {select,menu,summary,panel,selected,label}=opsMultiFilters.get(id);
+ menu.hidden=select.disabled;
+ select.hidden=true;
+ summary.textContent=selected.size===0?label:selected.size===1?(options.get([...selected][0])??[...selected][0]):selected.size+" selected";
+ summary.title=summary.textContent;
+ panel.replaceChildren();
+ if(!options.size)panel.textContent="No options available";
+ for(const [value,name] of options){
+   const item=document.createElement("label");
+   const checkbox=document.createElement("input");
+   checkbox.type="checkbox";
+   checkbox.checked=selected.has(value);
+   checkbox.addEventListener("change",()=>{
+     if(checkbox.checked)selected.add(value);else selected.delete(value);
+     select.dispatchEvent(new Event("change"));
+     [...panel.querySelectorAll("input")].find(input=>input.value===value)?.focus();
+   });
+   checkbox.value=value;
+   item.append(checkbox,document.createTextNode(name));
+   panel.append(item);
+ }
+}
+function fillSelect(id,values,label,keepValue=true){
+ const state=opsMultiFilters.get(id);
+ if(!keepValue)state.selected.clear();
+ const options=new Map([...new Set([...values.filter(Boolean).map(String),...state.selected])]
+   .sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})).map(value=>[value,value]));
+ drawOpsMulti(id,options);
+}
+document.addEventListener("click",event=>{
+ for(const {menu} of opsMultiFilters.values())if(!menu.contains(event.target))menu.open=false;
+});
+document.addEventListener("keydown",event=>{
+ if(event.key!=="Escape")return;
+ for(const {menu,summary} of opsMultiFilters.values())if(menu.open){menu.open=false;if(menu.contains(event.target))summary.focus();}
+});
 function setFilterLock(){
  const locked=!cardFilter;
  $("filterArea").classList.toggle("filters-locked",locked);
@@ -537,40 +590,42 @@ function setFilterLock(){
 }
 function filteredForOptions(excludeId){
  let r=cardFilter?rowsForCard(cardFilter):[];
- const st=excludeId==="statusFilter"?"":$("statusFilter").value;
- const cu=excludeId==="customerFilter"?"":$("customerFilter").value;
- const sv=excludeId==="serviceFilter"?"":$("serviceFilter").value;
- const dp=excludeId==="depotFilter"?"":$("depotFilter").value;
- const co=excludeId==="accountFilter"?"":$("accountFilter").value;
- const af=excludeId==="ackFilter"?"":$("ackFilter").value;
+ const st=filterSelection("statusFilter",excludeId);
+ const cu=filterSelection("customerFilter",excludeId);
+ const sv=filterSelection("serviceFilter",excludeId);
+ const dp=filterSelection("depotFilter",excludeId);
+ const co=filterSelection("accountFilter",excludeId);
+ const af=filterSelection("ackFilter",excludeId);
  return r.filter(x=>
-   (!st||x.Status===st)&&
-   (!cu||x.Sender===cu)&&
-   (!sv||x.Service===sv)&&
-   (!dp||x.DeliveryDepot===dp)&&
-   (!co||x.AccountCode===co)&&
-   (!af||(af==="ack"?isAck(x.Docket):!isAck(x.Docket)))
+   (!st.size||st.has(String(x.Status??"")))&&
+   (!cu.size||cu.has(String(x.Sender??"")))&&
+   (!sv.size||sv.has(String(x.Service??"")))&&
+   (!dp.size||dp.has(String(x.DeliveryDepot??"")))&&
+   (!co.size||co.has(String(x.AccountCode??"")))&&
+   (!af.size||af.has(isAck(x.Docket)?"ack":"unack"))
  );
 }
 function populateFilters(reset=false){
  setFilterLock();
+ if(reset)clearFilterSelection("ackFilter");
+ drawOpsMulti("ackFilter",new Map([...$("ackFilter").options].filter(option=>option.value).map(option=>[option.value,option.textContent])));
  if(!cardFilter){
    fillSelect("statusFilter",[],"All Statuses",false);
    fillSelect("customerFilter",[],"All Customers",false);
    fillSelect("serviceFilter",[],"All Services",false);
    fillSelect("depotFilter",[],"All Del Depots",false);
    fillSelect("accountFilter",[],"All Acc. Codes",false);
-   if(reset)$("ackFilter").value="";
+   if(reset)clearFilterSelection("ackFilter");
    return;
  }
  if(reset){
    $("search").value="";
-   $("statusFilter").value="";
-   $("customerFilter").value="";
-   $("serviceFilter").value="";
-   $("depotFilter").value="";
-   $("accountFilter").value="";
-   $("ackFilter").value="";
+   clearFilterSelection("statusFilter");
+   clearFilterSelection("customerFilter");
+   clearFilterSelection("serviceFilter");
+   clearFilterSelection("depotFilter");
+   clearFilterSelection("accountFilter");
+   clearFilterSelection("ackFilter");
  }
  fillSelect("statusFilter",filteredForOptions("statusFilter").map(x=>x.Status),"All Statuses");
  fillSelect("customerFilter",filteredForOptions("customerFilter").map(x=>x.Sender),"All Customers");
@@ -643,7 +698,7 @@ $("search").addEventListener("input",renderGrid);
  renderGrid();
 }));
 $("clearFilters").onclick=()=>{
- $("search").value="";$("statusFilter").value="";$("customerFilter").value="";$("serviceFilter").value="";$("depotFilter").value="";$("accountFilter").value="";$("ackFilter").value="";
+ $("search").value="";clearFilterSelection("statusFilter");clearFilterSelection("customerFilter");clearFilterSelection("serviceFilter");clearFilterSelection("depotFilter");clearFilterSelection("accountFilter");clearFilterSelection("ackFilter");
  populateFilters(false);
  renderAll();
 };
